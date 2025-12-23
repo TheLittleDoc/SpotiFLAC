@@ -359,6 +359,25 @@ export function SettingsPage() {
                     onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, useAlbumArtist: checked }))}
                 />
             </div>
+            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+                <Label htmlFor="generate-m3u" className="cursor-pointer text-sm">Make .m3u</Label>
+                <Switch
+                    id="generate-m3u"
+                    checked={tempSettings.generateM3U}
+                    onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, generateM3U: checked }))}
+                />
+            </div>
+                <div className="flex items-center gap-3">
+
+                <Label htmlFor="make-playlist-sub" className="cursor-pointer text-sm">Make playlist subfolder</Label>
+                <Switch
+                    id="make-playlist-sub"
+                    checked={tempSettings.makePlaylistSubfolder}
+                    onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, makePlaylistSubfolder: checked }))}
+                />
+                </div>
+            </div>
           <div className="border-t" />
 
           {/* Filename Format */}

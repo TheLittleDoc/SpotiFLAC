@@ -28,6 +28,7 @@ type Metadata struct {
 	ISRC        string
 	Lyrics      string
 	Description string
+	SongLength  int
 }
 
 func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
@@ -99,6 +100,59 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 	}
 
 	return nil
+}
+
+func ReadMetadata(filepath string) (Metadata, error) {
+	var metadata Metadata
+
+	f, err := flac.ParseFile(filepath)
+	if err != nil {
+		return metadata, fmt.Errorf("failed to parse FLAC file: %w", err)
+	}
+	streamInfo, err := f.GetStreamInfo()
+	if err != nil {
+		return metadata, fmt.Errorf("failed to get stream info: %w", err)
+	}
+	metadata.SongLength = int(streamInfo.SampleCount / int64(streamInfo.SampleRate))
+
+	for _, block := range f.Meta {
+		if block.Type == flac.VorbisComment {
+			cmt, err := flacvorbis.ParseFromMetaDataBlock(*block)
+			if err != nil {
+				continue
+			}
+
+			if titles, err := cmt.Get(flacvorbis.FIELD_TITLE); err == nil && len(titles) > 0 {
+				metadata.Title = titles[0]
+			}
+			if artists, err := cmt.Get(flacvorbis.FIELD_ARTIST); err == nil && len(artists) > 0 {
+				metadata.Artist = artists[0]
+			}
+			if albums, err := cmt.Get(flacvorbis.FIELD_ALBUM); err == nil && len(albums) > 0 {
+				metadata.Album = albums[0]
+			}
+			if dates, err := cmt.Get(flacvorbis.FIELD_DATE); err == nil && len(dates) > 0 {
+				metadata.Date = dates[0]
+			}
+			if trackNumbers, err := cmt.Get(flacvorbis.FIELD_TRACKNUMBER); err == nil && len(trackNumbers) > 0 {
+				if tn, convErr := strconv.Atoi(trackNumbers[0]); convErr == nil {
+					metadata.TrackNumber = tn
+				}
+			}
+			if discNumbers, err := cmt.Get("DISCNUMBER"); err == nil && len(discNumbers) > 0 {
+				if dn, convErr := strconv.Atoi(discNumbers[0]); convErr == nil {
+					metadata.DiscNumber = dn
+				}
+			}
+			if isrcs, err := cmt.Get(flacvorbis.FIELD_ISRC); err == nil && len(isrcs) > 0 {
+				metadata.ISRC = isrcs[0]
+			}
+
+		}
+
+	}
+	return metadata, nil
+
 }
 
 func embedCoverArt(f *flac.File, coverPath string) error {

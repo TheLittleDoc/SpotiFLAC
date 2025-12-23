@@ -19,6 +19,8 @@ export interface Settings {
   folderTemplate: string;
   filenamePreset: FilenamePreset;
   filenameTemplate: string;
+  generateM3U?: boolean;
+  makePlaylistSubfolder?: boolean;
   // Legacy settings (kept for migration)
   filenameFormat?: "title-artist" | "artist-title" | "title";
   useAlbumArtist?: boolean;

@@ -124,6 +124,19 @@ func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 	return string(jsonData), nil
 }
 
+func (a *App) AppendToM3U(playlistPath string, trackPath string) error {
+	fmt.Printf("[AppendToM3U] Called for playlist: %s\n", playlistPath)
+	if playlistPath == "" || trackPath == "" {
+		return fmt.Errorf("playlist path and track path are required")
+	}
+
+	err := backend.AppendTrackToM3U(playlistPath, trackPath)
+	if err != nil {
+		return fmt.Errorf("failed to append to M3U: %v", err)
+	}
+	return nil
+}
+
 // DownloadTrack downloads a track by ISRC
 func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	if req.ISRC == "" {
