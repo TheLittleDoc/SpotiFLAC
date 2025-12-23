@@ -3,10 +3,10 @@ import { GetDefaults } from "../../wailsjs/go/main/App";
 export type FontFamily = "google-sans" | "inter" | "poppins" | "roboto" | "dm-sans" | "plus-jakarta-sans" | "manrope" | "space-grotesk" | "noto-sans" | "nunito-sans" | "figtree" | "raleway" | "public-sans" | "outfit" | "jetbrains-mono" | "geist-sans";
 
 // Folder structure presets
-export type FolderPreset = "none" | "artist" | "album" | "artist-album" | "artist-year-album" | "custom";
+export type FolderPreset = "none" | "artist" | "album" | "year-album" | "year-artist-album" | "artist-album" | "artist-year-album" | "artist-year-nested-album" | "album-artist" | "album-artist-album" | "album-artist-year-album" | "album-artist-year-nested-album" | "year" | "year-artist" | "custom";
 
 // Filename format presets
-export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-title" | "track-title-artist" | "track-artist-title" | "custom";
+export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-title" | "track-title-artist" | "track-artist-title" | "title-album-artist" | "track-title-album-artist" | "artist-album-title" | "track-dash-title" | "disc-track-title" | "disc-track-title-artist" | "custom";
 
 export interface Settings {
   downloadPath: string;
@@ -39,9 +39,18 @@ export const FOLDER_PRESETS: Record<FolderPreset, { label: string; template: str
   "none": { label: "No Subfolder", template: "" },
   "artist": { label: "Artist", template: "{artist}" },
   "album": { label: "Album", template: "{album}" },
+  "year-album": { label: "[Year] Album", template: "[{year}] {album}" },
+  "year-artist-album": { label: "[Year] Artist - Album", template: "[{year}] {artist} - {album}" },
   "artist-album": { label: "Artist / Album", template: "{artist}/{album}" },
   "artist-year-album": { label: "Artist / [Year] Album", template: "{artist}/[{year}] {album}" },
-  "custom": { label: "Custom...", template: "" },
+  "artist-year-nested-album": { label: "Artist / Year / Album", template: "{artist}/{year}/{album}" },
+  "album-artist": { label: "Album Artist", template: "{album_artist}" },
+  "album-artist-album": { label: "Album Artist / Album", template: "{album_artist}/{album}" },
+  "album-artist-year-album": { label: "Album Artist / [Year] Album", template: "{album_artist}/[{year}] {album}" },
+  "album-artist-year-nested-album": { label: "Album Artist / Year / Album", template: "{album_artist}/{year}/{album}" },
+  "year": { label: "Year", template: "{year}" },
+  "year-artist": { label: "Year / Artist", template: "{year}/{artist}" },
+  "custom": { label: "Custom...", template: "{artist}/{album}" },
 };
 
 // Filename preset templates
@@ -52,18 +61,24 @@ export const FILENAME_PRESETS: Record<FilenamePreset, { label: string; template:
   "track-title": { label: "Track. Title", template: "{track}. {title}" },
   "track-title-artist": { label: "Track. Title - Artist", template: "{track}. {title} - {artist}" },
   "track-artist-title": { label: "Track. Artist - Title", template: "{track}. {artist} - {title}" },
-  "custom": { label: "Custom...", template: "" },
+  "title-album-artist": { label: "Title - Album Artist", template: "{title} - {album_artist}" },
+  "track-title-album-artist": { label: "Track. Title - Album Artist", template: "{track}. {title} - {album_artist}" },
+  "artist-album-title": { label: "Artist - Album - Title", template: "{artist} - {album} - {title}" },
+  "track-dash-title": { label: "Track - Title", template: "{track} - {title}" },
+  "disc-track-title": { label: "Disc-Track. Title", template: "{disc}-{track}. {title}" },
+  "disc-track-title-artist": { label: "Disc-Track. Title - Artist", template: "{disc}-{track}. {title} - {artist}" },
+  "custom": { label: "Custom...", template: "{title} - {artist}" },
 };
 
 // Available template variables
 export const TEMPLATE_VARIABLES = [
-  { key: "{artist}", description: "Artist name", example: "Taylor Swift" },
-  { key: "{album}", description: "Album name", example: "1989" },
   { key: "{title}", description: "Track title", example: "Shake It Off" },
+  { key: "{artist}", description: "Track artist", example: "Taylor Swift" },
+  { key: "{album}", description: "Album name", example: "1989" },
+  { key: "{album_artist}", description: "Album artist", example: "Taylor Swift" },
   { key: "{track}", description: "Track number", example: "01" },
+  { key: "{disc}", description: "Disc number", example: "1" },
   { key: "{year}", description: "Release year", example: "2014" },
-  { key: "{isrc}", description: "ISRC code", example: "USCJY1431309" },
-  { key: "{playlist}", description: "Playlist name", example: "My Playlist" },
 ];
 
 // Auto-detect operating system
@@ -195,8 +210,10 @@ export function getSettings(): Settings {
 export interface TemplateData {
   artist?: string;
   album?: string;
+  album_artist?: string;
   title?: string;
   track?: number;
+  disc?: number;
   year?: string;
   isrc?: string;
   playlist?: string;
@@ -208,10 +225,12 @@ export function parseTemplate(template: string, data: TemplateData): string {
   let result = template;
   
   // Replace each variable
+  result = result.replace(/\{title\}/g, data.title || "Unknown Title");
   result = result.replace(/\{artist\}/g, data.artist || "Unknown Artist");
   result = result.replace(/\{album\}/g, data.album || "Unknown Album");
-  result = result.replace(/\{title\}/g, data.title || "Unknown Title");
+  result = result.replace(/\{album_artist\}/g, data.album_artist || data.artist || "Unknown Artist");
   result = result.replace(/\{track\}/g, data.track ? String(data.track).padStart(2, "0") : "00");
+  result = result.replace(/\{disc\}/g, data.disc ? String(data.disc) : "1");
   result = result.replace(/\{year\}/g, data.year || "0000");
   result = result.replace(/\{isrc\}/g, data.isrc || "");
   result = result.replace(/\{playlist\}/g, data.playlist || "");

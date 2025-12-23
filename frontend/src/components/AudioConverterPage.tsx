@@ -19,7 +19,6 @@ import { Spinner } from "@/components/ui/spinner";
 import {
   IsFFmpegInstalled,
   DownloadFFmpeg,
-  InstallFFmpegFromFile,
   ConvertAudio,
   SelectAudioFiles,
 } from "../../wailsjs/go/main/App";
@@ -30,9 +29,18 @@ interface AudioFile {
   path: string;
   name: string;
   format: string;
+  size: number;
   status: "pending" | "converting" | "success" | "error";
   error?: string;
   outputPath?: string;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
 const BITRATE_OPTIONS = [
@@ -40,6 +48,11 @@ const BITRATE_OPTIONS = [
   { value: "256k", label: "256k" },
   { value: "192k", label: "192k" },
   { value: "128k", label: "128k" },
+];
+
+const M4A_CODEC_OPTIONS = [
+  { value: "aac", label: "AAC" },
+  { value: "alac", label: "ALAC" },
 ];
 
 const STORAGE_KEY = "spotiflac_audio_converter_state";
@@ -90,13 +103,26 @@ export function AudioConverterPage() {
     }
     return "320k";
   });
+  const [m4aCodec, setM4aCodec] = useState<"aac" | "alac">(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.m4aCodec === "aac" || parsed.m4aCodec === "alac") {
+          return parsed.m4aCodec;
+        }
+      }
+    } catch (err) {
+      // Ignore
+    }
+    return "aac";
+  });
   const [converting, setConverting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [isDraggingFFmpeg, setIsDraggingFFmpeg] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Helper function to save state to sessionStorage
-  const saveState = useCallback((stateToSave: { files: AudioFile[]; outputFormat: "mp3" | "m4a"; bitrate: string }) => {
+  const saveState = useCallback((stateToSave: { files: AudioFile[]; outputFormat: "mp3" | "m4a"; bitrate: string; m4aCodec: "aac" | "alac" }) => {
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
     } catch (err) {
@@ -109,10 +135,10 @@ export function AudioConverterPage() {
     checkFfmpegInstallation();
   }, []);
 
-  // Save state to sessionStorage whenever files, outputFormat, or bitrate changes
+  // Save state to sessionStorage whenever files, outputFormat, bitrate, or m4aCodec changes
   useEffect(() => {
-    saveState({ files, outputFormat, bitrate });
-  }, [files, outputFormat, bitrate, saveState]);
+    saveState({ files, outputFormat, bitrate, m4aCodec });
+  }, [files, outputFormat, bitrate, m4aCodec, saveState]);
 
   // Auto-set output format to M4A if all files are MP3
   useEffect(() => {
@@ -122,10 +148,19 @@ export function AudioConverterPage() {
     if (allMP3 && outputFormat !== "m4a") {
       setOutputFormat("m4a");
     }
-  }, [files, outputFormat]);
+    
+    // Reset to AAC if no FLAC files (ALAC doesn't make sense for lossy input)
+    const hasFlac = files.some((f) => f.format === "flac");
+    if (!hasFlac && m4aCodec === "alac") {
+      setM4aCodec("aac");
+    }
+  }, [files, outputFormat, m4aCodec]);
 
   // Check if format selection should be disabled (all files are MP3)
   const isFormatDisabled = files.length > 0 && files.every((f) => f.format === "mp3");
+  
+  // Check if any file is FLAC (ALAC only makes sense for lossless input)
+  const hasFlacFiles = files.some((f) => f.format === "flac");
 
   // Detect fullscreen/maximized window
   useEffect(() => {
@@ -181,61 +216,6 @@ export function AudioConverterPage() {
     }
   };
 
-  const handleFFmpegFileDrop = useCallback(
-    async (_x: number, _y: number, paths: string[]) => {
-      setIsDraggingFFmpeg(false);
-
-      if (paths.length === 0) return;
-
-      // Only process the first file
-      const filePath = paths[0];
-      const fileName = filePath.split(/[/\\]/).pop()?.toLowerCase() || "";
-
-      // Check if it's likely an ffmpeg executable
-      if (!fileName.includes("ffmpeg")) {
-        toast.error("Invalid File", {
-          description: "Please drop an FFmpeg executable file",
-        });
-        return;
-      }
-
-      setInstallingFfmpeg(true);
-      try {
-        const result = await InstallFFmpegFromFile(filePath);
-        if (result.success) {
-          toast.success("FFmpeg Installed", {
-            description: "FFmpeg has been installed successfully from file",
-          });
-          setFfmpegInstalled(true);
-        } else {
-          toast.error("Installation Failed", {
-            description: result.error || "Failed to install FFmpeg",
-          });
-        }
-      } catch (err) {
-        toast.error("Installation Failed", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        });
-      } finally {
-        setInstallingFfmpeg(false);
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (ffmpegInstalled === false) {
-      // Set up drag and drop for FFmpeg installation
-      OnFileDrop((x, y, paths) => {
-        handleFFmpegFileDrop(x, y, paths);
-      }, true);
-
-      return () => {
-        OnFileDropOff();
-      };
-    }
-  }, [ffmpegInstalled, handleFFmpegFileDrop]);
-
   const handleSelectFiles = async () => {
     try {
       const selectedFiles = await SelectAudioFiles();
@@ -249,7 +229,7 @@ export function AudioConverterPage() {
     }
   };
 
-  const addFiles = useCallback((paths: string[]) => {
+  const addFiles = useCallback(async (paths: string[]) => {
     const validExtensions = [".mp3", ".flac"];
     
     // Check for M4A files specifically
@@ -264,12 +244,19 @@ export function AudioConverterPage() {
       });
     }
 
+    // Get file sizes from backend
+    const GetFileSizes = (files: string[]): Promise<Record<string, number>> =>
+      (window as any)["go"]["main"]["App"]["GetFileSizes"](files);
+    
+    const validPaths = paths.filter((path) => {
+      const ext = path.toLowerCase().slice(path.lastIndexOf("."));
+      return validExtensions.includes(ext);
+    });
+
+    const fileSizes = validPaths.length > 0 ? await GetFileSizes(validPaths) : {};
+
     setFiles((prev) => {
-      const newFiles: AudioFile[] = paths
-        .filter((path) => {
-          const ext = path.toLowerCase().slice(path.lastIndexOf("."));
-          return validExtensions.includes(ext);
-        })
+      const newFiles: AudioFile[] = validPaths
         .filter((path) => !prev.some((f) => f.path === path))
         .map((path) => {
           const name = path.split(/[/\\]/).pop() || path;
@@ -278,6 +265,7 @@ export function AudioConverterPage() {
             path,
             name,
             format: ext,
+            size: fileSizes[path] || 0,
             status: "pending" as const,
           };
         });
@@ -364,6 +352,7 @@ export function AudioConverterPage() {
         input_files: inputPaths,
         output_format: outputFormat,
         bitrate: bitrate,
+        codec: outputFormat === "m4a" ? m4aCodec : "",
       });
 
       // Update file statuses based on results
@@ -434,35 +423,13 @@ export function AudioConverterPage() {
         <div
           className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg transition-all ${
             isFullscreen ? "flex-1 min-h-[400px]" : "h-[400px]"
-          } ${
-            isDraggingFFmpeg
-              ? "border-primary bg-primary/10"
-              : "border-muted-foreground/30"
-          }`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDraggingFFmpeg(true);
-          }}
-          onDragLeave={(e) => {
-            e.preventDefault();
-            setIsDraggingFFmpeg(false);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            setIsDraggingFFmpeg(false);
-          }}
-          style={{ "--wails-drop-target": "drop" } as React.CSSProperties}
+          } border-muted-foreground/30`}
         >
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-            <Download className="h-8 w-8 text-muted-foreground" />
+            <Download className="h-8 w-8 text-primary" />
           </div>
-          <p className="text-sm text-muted-foreground mb-2 text-center">
-            FFmpeg is required to convert audio files.
-          </p>
           <p className="text-sm text-muted-foreground mb-4 text-center">
-            {isDraggingFFmpeg
-              ? "Drop your FFmpeg executable here"
-              : "Drag and drop your FFmpeg executable here, or click the button below to download automatically."}
+            FFmpeg is required to convert audio files
           </p>
           <Button
             onClick={handleInstallFfmpeg}
@@ -538,18 +505,18 @@ export function AudioConverterPage() {
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <Upload className="h-8 w-8 text-primary" />
             </div>
-            <p className="text-sm text-muted-foreground mb-2 text-center">
+            <p className="text-sm text-muted-foreground mb-4 text-center">
               {isDragging
                 ? "Drop your audio files here"
                 : "Drag and drop audio files here, or click the button below to select"}
-            </p>
-            <p className="text-xs text-muted-foreground mb-4 text-center">
-              Supported formats: FLAC, MP3
             </p>
             <Button onClick={handleSelectFiles} size="lg">
               <Upload className="h-5 w-5" />
               Select Files
             </Button>
+            <p className="text-xs text-muted-foreground mt-4 text-center">
+              Supported formats: FLAC, MP3
+            </p>
           </>
         ) : (
           <div className="w-full h-full p-6 space-y-4 flex flex-col">
@@ -578,27 +545,54 @@ export function AudioConverterPage() {
                       </ToggleGroupItem>
                     </ToggleGroup>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="whitespace-nowrap">Bitrate:</Label>
-                    <ToggleGroup
-                      type="single"
-                      variant="outline"
-                      value={bitrate}
-                      onValueChange={(value) => {
-                        if (value) setBitrate(value);
-                      }}
-                    >
-                      {BITRATE_OPTIONS.map((option) => (
-                        <ToggleGroupItem
-                          key={option.value}
-                          value={option.value}
-                          aria-label={option.label}
-                        >
-                          {option.label}
-                        </ToggleGroupItem>
-                      ))}
-                    </ToggleGroup>
-                  </div>
+                  {/* Codec selection for M4A - only show ALAC option when input has FLAC files */}
+                  {outputFormat === "m4a" && hasFlacFiles && (
+                    <div className="flex items-center gap-2">
+                      <Label className="whitespace-nowrap">Codec:</Label>
+                      <ToggleGroup
+                        type="single"
+                        variant="outline"
+                        value={m4aCodec}
+                        onValueChange={(value) => {
+                          if (value) setM4aCodec(value as "aac" | "alac");
+                        }}
+                      >
+                        {M4A_CODEC_OPTIONS.map((option) => (
+                          <ToggleGroupItem
+                            key={option.value}
+                            value={option.value}
+                            aria-label={option.label}
+                          >
+                            {option.label}
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
+                    </div>
+                  )}
+                  {/* Bitrate selection - hide for ALAC (lossless) */}
+                  {!(outputFormat === "m4a" && m4aCodec === "alac") && (
+                    <div className="flex items-center gap-2">
+                      <Label className="whitespace-nowrap">Bitrate:</Label>
+                      <ToggleGroup
+                        type="single"
+                        variant="outline"
+                        value={bitrate}
+                        onValueChange={(value) => {
+                          if (value) setBitrate(value);
+                        }}
+                      >
+                        {BITRATE_OPTIONS.map((option) => (
+                          <ToggleGroupItem
+                            key={option.value}
+                            value={option.value}
+                            aria-label={option.label}
+                          >
+                            {option.label}
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -625,6 +619,9 @@ export function AudioConverterPage() {
                       </p>
                     )}
                   </div>
+                  <span className="text-xs text-muted-foreground">
+                    {formatFileSize(file.size)}
+                  </span>
                   <span className="text-xs uppercase text-muted-foreground">
                     {file.format}
                   </span>

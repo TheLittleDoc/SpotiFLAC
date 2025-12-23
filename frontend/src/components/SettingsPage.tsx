@@ -12,6 +12,14 @@ import {
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FolderOpen, Save, RotateCcw, Info } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, applyFont, FONT_OPTIONS, FOLDER_PRESETS, FILENAME_PRESETS, TEMPLATE_VARIABLES, type Settings as SettingsType, type FontFamily, type FolderPreset, type FilenamePreset } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
@@ -44,6 +52,7 @@ export function SettingsPage() {
   const [savedSettings, setSavedSettings] = useState<SettingsType>(getSettings());
   const [tempSettings, setTempSettings] = useState<SettingsType>(savedSettings);
   const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   useEffect(() => {
     applyThemeMode(savedSettings.themeMode);
@@ -94,6 +103,7 @@ export function SettingsPage() {
     applyThemeMode(defaultSettings.themeMode);
     applyTheme(defaultSettings.theme);
     applyFont(defaultSettings.fontFamily);
+    setShowResetConfirm(false);
     toast.success("Settings reset to default");
   };
 
@@ -305,37 +315,39 @@ export function SettingsPage() {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <Select
-              value={tempSettings.folderPreset}
-              onValueChange={(value: FolderPreset) => {
-                const preset = FOLDER_PRESETS[value];
-                setTempSettings(prev => ({
-                  ...prev,
-                  folderPreset: value,
-                  folderTemplate: value === "custom" ? prev.folderTemplate : preset.template
-                }));
-              }}
-            >
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(FOLDER_PRESETS).map(([key, { label }]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {tempSettings.folderPreset === "custom" && (
-              <InputWithContext
-                value={tempSettings.folderTemplate}
-                onChange={(e) => setTempSettings(prev => ({ ...prev, folderTemplate: e.target.value }))}
-                placeholder="{artist}/{album}"
-                className="h-9 text-sm"
-              />
-            )}
+            <div className="flex gap-2">
+              <Select
+                value={tempSettings.folderPreset}
+                onValueChange={(value: FolderPreset) => {
+                  const preset = FOLDER_PRESETS[value];
+                  setTempSettings(prev => ({
+                    ...prev,
+                    folderPreset: value,
+                    folderTemplate: value === "custom" ? (prev.folderTemplate || preset.template) : preset.template
+                  }));
+                }}
+              >
+                <SelectTrigger className="h-9 w-fit">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(FOLDER_PRESETS).map(([key, { label }]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {tempSettings.folderPreset === "custom" && (
+                <InputWithContext
+                  value={tempSettings.folderTemplate}
+                  onChange={(e) => setTempSettings(prev => ({ ...prev, folderTemplate: e.target.value }))}
+                  placeholder="{artist}/{album}"
+                  className="h-9 text-sm flex-1"
+                />
+              )}
+            </div>
             {tempSettings.folderTemplate && (
               <p className="text-xs text-muted-foreground">
-                Preview: <span className="font-mono">{tempSettings.folderTemplate.replace(/\{artist\}/g, "Taylor Swift").replace(/\{album\}/g, "1989").replace(/\{year\}/g, "2014")}/</span>
+                Preview: <span className="font-mono">{tempSettings.folderTemplate.replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album\}/g, "Black Panther").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{year\}/g, "2018")}/</span>
               </p>
             )}
           </div>
@@ -362,37 +374,39 @@ export function SettingsPage() {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <Select
-              value={tempSettings.filenamePreset}
-              onValueChange={(value: FilenamePreset) => {
-                const preset = FILENAME_PRESETS[value];
-                setTempSettings(prev => ({
-                  ...prev,
-                  filenamePreset: value,
-                  filenameTemplate: value === "custom" ? prev.filenameTemplate : preset.template
-                }));
-              }}
-            >
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(FILENAME_PRESETS).map(([key, { label }]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {tempSettings.filenamePreset === "custom" && (
-              <InputWithContext
-                value={tempSettings.filenameTemplate}
-                onChange={(e) => setTempSettings(prev => ({ ...prev, filenameTemplate: e.target.value }))}
-                placeholder="{track}. {title}"
-                className="h-9 text-sm"
-              />
-            )}
+            <div className="flex gap-2">
+              <Select
+                value={tempSettings.filenamePreset}
+                onValueChange={(value: FilenamePreset) => {
+                  const preset = FILENAME_PRESETS[value];
+                  setTempSettings(prev => ({
+                    ...prev,
+                    filenamePreset: value,
+                    filenameTemplate: value === "custom" ? (prev.filenameTemplate || preset.template) : preset.template
+                  }));
+                }}
+              >
+                <SelectTrigger className="h-9 w-fit">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(FILENAME_PRESETS).map(([key, { label }]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {tempSettings.filenamePreset === "custom" && (
+                <InputWithContext
+                  value={tempSettings.filenameTemplate}
+                  onChange={(e) => setTempSettings(prev => ({ ...prev, filenameTemplate: e.target.value }))}
+                  placeholder="{track}. {title}"
+                  className="h-9 text-sm flex-1"
+                />
+              )}
+            </div>
             {tempSettings.filenameTemplate && (
               <p className="text-xs text-muted-foreground">
-                Preview: <span className="font-mono">{tempSettings.filenameTemplate.replace(/\{artist\}/g, "Taylor Swift").replace(/\{title\}/g, "Shake It Off").replace(/\{track\}/g, "01").replace(/\{year\}/g, "2014")}.flac</span>
+                Preview: <span className="font-mono">{tempSettings.filenameTemplate.replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{title\}/g, "All The Stars").replace(/\{track\}/g, "01").replace(/\{disc\}/g, "1").replace(/\{year\}/g, "2018")}.flac</span>
               </p>
             )}
           </div>
@@ -401,7 +415,7 @@ export function SettingsPage() {
 
       {/* Actions */}
       <div className="flex gap-2 justify-between pt-4 border-t">
-        <Button variant="outline" onClick={handleReset} className="gap-1.5">
+        <Button variant="outline" onClick={() => setShowResetConfirm(true)} className="gap-1.5">
           <RotateCcw className="h-4 w-4" />
           Reset to Default
         </Button>
@@ -410,6 +424,22 @@ export function SettingsPage() {
           Save Changes
         </Button>
       </div>
+
+      {/* Reset Confirmation Dialog */}
+      <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+        <DialogContent className="max-w-md [&>button]:hidden">
+          <DialogHeader>
+            <DialogTitle>Reset to Default?</DialogTitle>
+            <DialogDescription>
+              This will reset all settings to their default values. Your custom configurations will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetConfirm(false)}>Cancel</Button>
+            <Button onClick={handleReset}>Reset</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

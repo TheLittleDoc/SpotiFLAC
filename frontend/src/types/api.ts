@@ -168,6 +168,7 @@ export interface SpectrumData {
 
 export interface AnalysisResult {
   file_path: string;
+  file_size: number;
   sample_rate: number;
   channels: number;
   bits_per_sample: number;
@@ -228,3 +229,13 @@ export interface CoverDownloadResponse {
 }
 
 
+
+export interface AudioMetadata {
+  title: string;
+  artist: string;
+  album: string;
+  album_artist: string;
+  track_number: number;
+  disc_number: number;
+  year: string;
+}
