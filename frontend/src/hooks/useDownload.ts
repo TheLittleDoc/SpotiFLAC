@@ -5,6 +5,7 @@ import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import type { TrackMetadata } from "@/types/api";
+import { AppendToM3U } from "../../wailsjs/go/main/App";
 
 // Type definitions for new backend functions
 interface CheckFileExistenceRequest {
@@ -83,7 +84,7 @@ export function useDownload() {
     };
 
     // For playlist/discography downloads, always create a folder with the playlist/artist name
-    if (playlistName) {
+    if (playlistName && settings.makePlaylistSubfolder) {
       outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
     }
 
@@ -332,7 +333,7 @@ export function useDownload() {
     };
 
     // For playlist/discography downloads, always create a folder with the playlist/artist name
-    if (folderName && !isAlbum) {
+    if (folderName && !isAlbum && settings.makePlaylistSubfolder) {
       outputDir = joinPath(os, outputDir, sanitizePath(folderName.replace(/\//g, " "), os));
     }
 
@@ -584,6 +585,7 @@ export function useDownload() {
         } else {
           toast.success(response.message);
         }
+
         setDownloadedTracks((prev) => new Set(prev).add(isrc));
         setFailedTracks((prev) => {
           const newSet = new Set(prev);
@@ -881,10 +883,15 @@ export function useDownload() {
       // Find original index and itemID
       const originalIndex = tracksWithIsrc.findIndex((t) => t.isrc === track.isrc);
       const itemID = itemIDs[originalIndex];
-
+      let playlistFile: string = "";
+      let playlistName: string = "";
       setDownloadingTrack(track.isrc);
       setCurrentDownloadInfo({ name: track.name, artists: track.artists });
-
+      if(!isAlbum && folderName)
+      {
+        playlistName = folderName;
+      }
+      
       try {
         // Extract year from release_date (format: YYYY-MM-DD or YYYY)
         const releaseYear = track.release_date?.substring(0, 4);
@@ -918,6 +925,18 @@ export function useDownload() {
           } else {
             successCount++;
             logger.success(`downloaded: ${track.name} - ${track.artists}`);
+          }
+          if(settings.generateM3U && playlistName != undefined && response.file) {
+              // Append to M3U playlist
+              try {
+                  logger.info(`${playlistFile}`)
+
+                  logger.info(`${response.file}`)
+                  await AppendToM3U(settings.downloadPath, playlistName, response.file);
+                  logger.info(`Appended to M3U: ${playlistName}`);
+              } catch (err) {
+                  logger.error(`Failed to append to M3U: ${err}`);
+              }
           }
           setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
           setFailedTracks((prev) => {

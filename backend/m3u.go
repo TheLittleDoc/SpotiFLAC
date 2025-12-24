@@ -8,12 +8,9 @@ import (
 	// import metadata.go
 )
 
-func AppendTrackToM3U(playlistFile string, audioFile string) interface{} {
+func AppendTrackToM3U(baseDir string, playlistName string, audioFile string) interface{} {
 	// check if playlistFile exists
-	playlistName := ""
-	playlistName = strings.TrimSuffix(playlistFile, ".m3u")
-	playlistName = strings.TrimSuffix(playlistName, ".M3U")
-	playlistName = strings.Split(playlistName, "/")[len(strings.Split(playlistName, "/"))-1]
+	var playlistFile = baseDir + "/" + playlistName + ".m3u"
 	if _, err := os.Stat(playlistFile); os.IsNotExist(err) {
 		// create the file
 		file, err := os.Create(playlistFile)
@@ -43,7 +40,7 @@ func AppendTrackToM3U(playlistFile string, audioFile string) interface{} {
 	relativePath := audioFile
 	if strings.Contains(audioFile, "/") {
 		fmt.Printf("Playlist Name: %s\n", playlistName)
-		parts := strings.Split(audioFile, playlistName+"/")
+		parts := strings.Split(audioFile, baseDir+"/")
 		for _, part := range parts {
 			fmt.Printf("Part: %s\n", part)
 		}

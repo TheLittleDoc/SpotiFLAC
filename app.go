@@ -125,13 +125,13 @@ func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 	return string(jsonData), nil
 }
 
-func (a *App) AppendToM3U(playlistPath string, trackPath string) error {
-	fmt.Printf("[AppendToM3U] Called for playlist: %s\n", playlistPath)
-	if playlistPath == "" || trackPath == "" {
+func (a *App) AppendToM3U(baseDir string, playlistName string, trackPath string) error {
+	fmt.Printf("[AppendToM3U] Called for playlist: %s\n", playlistName)
+	if trackPath == "" {
 		return fmt.Errorf("playlist path and track path are required")
 	}
 
-	err := backend.AppendTrackToM3U(playlistPath, trackPath)
+	err := backend.AppendTrackToM3U(baseDir, playlistName, trackPath)
 	if err != nil {
 		return fmt.Errorf("failed to append to M3U: %v", err)
 	}
