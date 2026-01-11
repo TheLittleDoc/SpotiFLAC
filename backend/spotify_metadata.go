@@ -16,6 +16,7 @@ var (
 	errInvalidSpotifyURL = errors.New("invalid or unsupported Spotify URL")
 )
 
+// SpotifyMetadataClient mirrors the behaviour of Doc/getMetadata.py and interacts with Spotify's web API.
 type SpotifyMetadataClient struct {
 	httpClient *http.Client
 }
@@ -46,12 +47,14 @@ type TrackMetadata struct {
 	Plays       string `json:"plays,omitempty"`
 }
 
+// ArtistSimple holds basic artist info for clickable artists
 type ArtistSimple struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	ExternalURL string `json:"external_urls"`
 }
 
+// AlbumTrackMetadata holds per-track info for album / playlist formatting.
 type AlbumTrackMetadata struct {
 	SpotifyID   string         `json:"spotify_id,omitempty"`
 	Artists     string         `json:"artists"`
@@ -324,11 +327,13 @@ type SearchResponse struct {
 	Playlists []SearchResult `json:"playlists"`
 }
 
+// GetFilteredSpotifyData is a convenience wrapper that mirrors the Python module's entry point.
 func GetFilteredSpotifyData(ctx context.Context, spotifyURL string, batch bool, delay time.Duration) (interface{}, error) {
 	client := NewSpotifyMetadataClient()
 	return client.GetFilteredData(ctx, spotifyURL, batch, delay)
 }
 
+// GetFilteredData fetches, normalises, and formats Spotify payloads for the given URL.
 func (c *SpotifyMetadataClient) GetFilteredData(ctx context.Context, spotifyURL string, batch bool, delay time.Duration) (interface{}, error) {
 	parsed, err := parseSpotifyURI(spotifyURL)
 	if err != nil {
@@ -1280,11 +1285,13 @@ func (c *SpotifyMetadataClient) Search(ctx context.Context, query string, limit 
 	return response, nil
 }
 
+// SearchSpotify is a convenience wrapper for the Search method
 func SearchSpotify(ctx context.Context, query string, limit int) (*SearchResponse, error) {
 	client := NewSpotifyMetadataClient()
 	return client.Search(ctx, query, limit)
 }
 
+// SearchByType searches for a specific type (track, album, artist, playlist) with offset support
 func (c *SpotifyMetadataClient) SearchByType(ctx context.Context, query string, searchType string, limit int, offset int) ([]SearchResult, error) {
 	if query == "" {
 		return nil, errors.New("search query cannot be empty")
@@ -1396,6 +1403,7 @@ func (c *SpotifyMetadataClient) SearchByType(ctx context.Context, query string, 
 	return results, nil
 }
 
+// SearchSpotifyByType is a convenience wrapper for SearchByType
 func SearchSpotifyByType(ctx context.Context, query string, searchType string, limit int, offset int) ([]SearchResult, error) {
 	client := NewSpotifyMetadataClient()
 	return client.SearchByType(ctx, query, searchType, limit, offset)

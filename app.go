@@ -424,7 +424,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 
 	// Embed lyrics after successful download (only for new downloads with Spotify ID and if embedLyrics is enabled)
 	if !alreadyExists && req.SpotifyID != "" && req.EmbedLyrics && strings.HasSuffix(filename, ".flac") {
-		go func(filePath, spotifyID, trackName, artistName string) {
+		go func(filePath, spotifyID, trackName, artistName string, duration int) {
 			fmt.Printf("\n========== LYRICS FETCH START ==========\n")
 			fmt.Printf("Spotify ID: %s\n", spotifyID)
 			fmt.Printf("Track: %s\n", trackName)
@@ -434,7 +434,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			lyricsClient := backend.NewLyricsClient()
 
 			// Try all sources with fallbacks
-			lyricsResp, source, err := lyricsClient.FetchLyricsAllSources(spotifyID, trackName, artistName)
+			lyricsResp, source, err := lyricsClient.FetchLyricsAllSources(spotifyID, trackName, artistName, duration)
 			if err != nil {
 				fmt.Printf("All sources failed: %v\n", err)
 				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
@@ -471,7 +471,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				fmt.Printf("Lyrics embedded successfully!\n")
 				fmt.Printf("========== LYRICS FETCH END (SUCCESS) ==========\n\n")
 			}
-		}(filename, req.SpotifyID, req.TrackName, req.ArtistName)
+		}(filename, req.SpotifyID, req.TrackName, req.ArtistName, req.Duration)
 	}
 
 	message := "Download completed successfully"

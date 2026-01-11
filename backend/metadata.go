@@ -153,9 +153,6 @@ func ReadMetadata(filepath string) (Metadata, error) {
 					metadata.DiscNumber = dn
 				}
 			}
-			if isrcs, err := cmt.Get(flacvorbis.FIELD_ISRC); err == nil && len(isrcs) > 0 {
-				metadata.ISRC = isrcs[0]
-			}
 
 		}
 

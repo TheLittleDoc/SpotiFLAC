@@ -5,7 +5,7 @@ import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import type { TrackMetadata } from "@/types/api";
-import { AppendToM3U } from "../../wailsjs/go/main/App";
+//import { AppendToM3U } from "../../wailsjs/go/main/App";
 
 // Type definitions for new backend functions
 interface CheckFileExistenceRequest {
