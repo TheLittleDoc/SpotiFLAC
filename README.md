@@ -1,5 +1,7 @@
 [![GitHub All Releases](https://img.shields.io/github/downloads/afkarxyz/SpotiFLAC/total?style=for-the-badge)](https://github.com/afkarxyz/SpotiFLAC/releases)
 
+<!-- ![Maintenance](https://maintenance.afkarxyz.fun?v=3) -->
+
 ![Image](https://github.com/user-attachments/assets/a6e92fdd-2944-45c1-83e8-e23a26c827af)
 
 <div align="center">
@@ -10,18 +12,44 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
 ![macOS](https://img.shields.io/badge/macOS-10.13%2B-000000?style=for-the-badge&logo=apple&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-Any-FCC624?style=for-the-badge&logo=linux&logoColor=white)
 
+<a href="https://trendshift.io/repositories/15737" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15737" alt="afkarxyz%2FSpotiFLAC | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
 </div>
 
 ### [Download](https://github.com/afkarxyz/SpotiFLAC/releases)
 
 ## Screenshot
 
-![Image](https://github.com/user-attachments/assets/afe01529-bcf0-4486-8792-62af26adafee)
+![Image](https://github.com/user-attachments/assets/4bc2d45a-8afc-4c91-9d57-afdbd2b9c225)
 
-## Other project
+## Other projects
 
 ### [SpotiDownloader](https://github.com/afkarxyz/SpotiDownloader) 
+Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API.
 
-Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API
+### [SpotubeDL](https://spotubedl.com)
+Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality.
+
+### [SpotiFLAC (Mobile)](https://github.com/zarzet/SpotiFLAC-Mobile)
+SpotiFLAC for Android & iOS — maintained by [@zarzet](https://github.com/zarzet)
 
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/afkarxyz)
+
+> Every coffee helps me keep going
+
+## Disclaimer
+
+This project is for **educational and private use only**. The developer does not condone or encourage copyright infringement.
+
+**SpotiFLAC** is a third-party tool and is not affiliated with, endorsed by, or connected to Spotify, Tidal, Qobuz, Amazon Music, or any other streaming service.
+
+You are solely responsible for:
+1. Ensuring your use of this software complies with your local laws.
+2. Reading and adhering to the Terms of Service of the respective platforms.
+3. Any legal consequences resulting from the misuse of this tool.
+
+The software is provided "as is", without warranty of any kind. The author assumes no liability for any bans, damages, or legal issues arising from its use.
+
+> [!TIP]
+>
+> **Star Us**, You will receive all release notifications from GitHub without any delay ~
