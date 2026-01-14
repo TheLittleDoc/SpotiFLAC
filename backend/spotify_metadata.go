@@ -351,7 +351,7 @@ func (c *SpotifyMetadataClient) GetFilteredData(ctx context.Context, spotifyURL 
 func (c *SpotifyMetadataClient) getRawSpotifyData(ctx context.Context, parsed spotifyURI, batch bool, delay time.Duration) (interface{}, error) {
 	switch parsed.Type {
 	case "playlist":
-		return c.fetchPlaylist(ctx, parsed.ID)
+		return c.fetchPlaylistAlbums(ctx, parsed.ID)
 	case "album":
 		return c.fetchAlbum(ctx, parsed.ID)
 	case "track":
@@ -560,7 +560,7 @@ func (c *SpotifyMetadataClient) fetchPlaylist(ctx context.Context, playlistID st
 
 	allItems := []interface{}{}
 	offset := 0
-	limit := 1000
+	limit := 2000
 	var totalCount interface{}
 	var data map[string]interface{}
 
@@ -643,6 +643,46 @@ func (c *SpotifyMetadataClient) fetchPlaylist(ctx context.Context, playlistID st
 	}
 
 	return &result, nil
+}
+
+func (c *SpotifyMetadataClient) fetchPlaylistAlbums(ctx context.Context, playlistID string) (*apiPlaylistResponse, error) {
+	playlistData, _ := c.fetchPlaylist(ctx, playlistID)
+
+	for _, track := range playlistData.Tracks {
+		albumID := track.AlbumID
+		if albumID != "" {
+			albumData, _ := c.fetchAlbum(ctx, albumID)
+			for _, albumTrack := range albumData.Tracks {
+				if albumTrack.ID != track.ID {
+					playlistData.Tracks = append(playlistData.Tracks, struct {
+						ID        string   `json:"id"`
+						Cover     string   `json:"cover"`
+						Title     string   `json:"title"`
+						Artist    string   `json:"artist"`
+						ArtistIds []string `json:"artistIds"`
+						Plays     string   `json:"plays"`
+						Status    string   `json:"status"`
+						Album     string   `json:"album"`
+						AlbumID   string   `json:"albumId"`
+						Duration  string   `json:"duration"`
+					}{
+						ID:        albumTrack.ID,
+						Cover:     track.Cover,
+						Title:     albumTrack.Name,
+						Artist:    albumTrack.Artists,
+						ArtistIds: albumTrack.ArtistIds,
+						Plays:     albumTrack.Plays,
+						Status:    "added_from_album",
+						Album:     track.Album,
+						AlbumID:   track.AlbumID,
+						Duration:  albumTrack.Duration,
+					})
+				}
+			}
+		}
+	}
+
+	return playlistData, nil
 }
 
 func (c *SpotifyMetadataClient) fetchArtistDiscography(ctx context.Context, parsed spotifyURI) (*apiArtistResponse, error) {
