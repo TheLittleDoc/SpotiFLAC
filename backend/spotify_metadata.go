@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +47,7 @@ type TrackMetadata struct {
 	Copyright   string `json:"copyright,omitempty"`
 	Publisher   string `json:"publisher,omitempty"`
 	Plays       string `json:"plays,omitempty"`
+	PreviewURL  string `json:"preview_url,omitempty"`
 }
 
 // ArtistSimple holds basic artist info for clickable artists
@@ -78,6 +81,7 @@ type AlbumTrackMetadata struct {
 	ArtistsData []ArtistSimple `json:"artists_data,omitempty"`
 	Plays       string         `json:"plays,omitempty"`
 	Status      string         `json:"status,omitempty"`
+	PreviewURL  string         `json:"preview_url,omitempty"`
 }
 
 type TrackResponse struct {
@@ -228,16 +232,17 @@ type apiPlaylistResponse struct {
 	Count     int    `json:"count"`
 	Followers int    `json:"followers"`
 	Tracks    []struct {
-		ID        string   `json:"id"`
-		Cover     string   `json:"cover"`
-		Title     string   `json:"title"`
-		Artist    string   `json:"artist"`
-		ArtistIds []string `json:"artistIds"`
-		Plays     string   `json:"plays"`
-		Status    string   `json:"status"`
-		Album     string   `json:"album"`
-		AlbumID   string   `json:"albumId"`
-		Duration  string   `json:"duration"`
+		ID          string   `json:"id"`
+		Cover       string   `json:"cover"`
+		Title       string   `json:"title"`
+		Artist      string   `json:"artist"`
+		ArtistIds   []string `json:"artistIds"`
+		Plays       string   `json:"plays"`
+		Status      string   `json:"status"`
+		Album       string   `json:"album"`
+		AlbumArtist string   `json:"albumArtist"`
+		AlbumID     string   `json:"albumId"`
+		Duration    string   `json:"duration"`
 	} `json:"tracks"`
 }
 
@@ -853,12 +858,12 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 
 	externalURL := fmt.Sprintf("https://open.spotify.com/track/%s", raw.ID)
 
-	coverURL := raw.Cover.Medium
+	coverURL := raw.Cover.Small
 	if coverURL == "" {
-		coverURL = raw.Cover.Large
+		coverURL = raw.Cover.Medium
 	}
 	if coverURL == "" {
-		coverURL = raw.Cover.Small
+		coverURL = raw.Cover.Large
 	}
 
 	releaseDate := raw.Album.Released
@@ -987,7 +992,7 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *apiPlaylistResponse) Pla
 			Artists:     item.Artist,
 			Name:        item.Title,
 			AlbumName:   item.Album,
-			AlbumArtist: item.Artist,
+			AlbumArtist: item.AlbumArtist,
 			DurationMS:  durationMS,
 			Images:      item.Cover,
 			ReleaseDate: "",
@@ -1447,4 +1452,38 @@ func (c *SpotifyMetadataClient) SearchByType(ctx context.Context, query string, 
 func SearchSpotifyByType(ctx context.Context, query string, searchType string, limit int, offset int) ([]SearchResult, error) {
 	client := NewSpotifyMetadataClient()
 	return client.SearchByType(ctx, query, searchType, limit, offset)
+}
+
+func GetPreviewURL(trackID string) (string, error) {
+	if trackID == "" {
+		return "", errors.New("track ID cannot be empty")
+	}
+
+	embedURL := fmt.Sprintf("https://open.spotify.com/embed/track/%s", trackID)
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Get(embedURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch embed page: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("embed page returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	html := string(body)
+	re := regexp.MustCompile(`https://p\.scdn\.co/mp3-preview/[a-zA-Z0-9]+`)
+	match := re.FindString(html)
+
+	if match == "" {
+		return "", errors.New("preview URL not found")
+	}
+
+	return match, nil
 }

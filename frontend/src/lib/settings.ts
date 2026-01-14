@@ -1,5 +1,5 @@
-import { GetDefaults } from "../../wailsjs/go/main/App";
-export type FontFamily = "google-sans" | "inter" | "poppins" | "roboto" | "dm-sans" | "plus-jakarta-sans" | "manrope" | "space-grotesk" | "noto-sans" | "nunito-sans" | "figtree" | "raleway" | "public-sans" | "outfit" | "jetbrains-mono" | "geist-sans";
+import { GetDefaults, LoadSettings, SaveSettings as SaveToBackend } from "../../wailsjs/go/main/App";
+export type FontFamily = "google-sans" | "inter" | "poppins" | "roboto" | "dm-sans" | "plus-jakarta-sans" | "manrope" | "space-grotesk" | "noto-sans" | "nunito-sans" | "figtree" | "raleway" | "public-sans" | "outfit" | "jetbrains-mono" | "geist-sans" | "bricolage-grotesque";
 export type FolderPreset = "none" | "artist" | "album" | "year-album" | "year-artist-album" | "artist-album" | "artist-year-album" | "artist-year-nested-album" | "album-artist" | "album-artist-album" | "album-artist-year-album" | "album-artist-year-nested-album" | "year" | "year-artist" | "custom";
 export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-title" | "track-title-artist" | "track-artist-title" | "title-album-artist" | "track-title-album-artist" | "artist-album-title" | "track-dash-title" | "disc-track-title" | "disc-track-title-artist" | "custom";
 export interface Settings {
@@ -109,24 +109,24 @@ export const FONT_OPTIONS: {
     label: string;
     fontFamily: string;
 }[] = [
-    { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
-    { value: "figtree", label: "Figtree", fontFamily: '"Figtree", system-ui, sans-serif' },
-    { value: "geist-sans", label: "Geist Sans", fontFamily: '"Geist", system-ui, sans-serif' },
-    { value: "google-sans", label: "Google Sans", fontFamily: '"Google Sans", system-ui, sans-serif' },
-    { value: "inter", label: "Inter", fontFamily: '"Inter", system-ui, sans-serif' },
-    { value: "jetbrains-mono", label: "JetBrains Mono", fontFamily: '"JetBrains Mono", ui-monospace, monospace' },
-    { value: "manrope", label: "Manrope", fontFamily: '"Manrope", system-ui, sans-serif' },
-    { value: "noto-sans", label: "Noto Sans", fontFamily: '"Noto Sans", system-ui, sans-serif' },
-    { value: "nunito-sans", label: "Nunito Sans", fontFamily: '"Nunito Sans", system-ui, sans-serif' },
-    { value: "outfit", label: "Outfit", fontFamily: '"Outfit", system-ui, sans-serif' },
-    { value: "plus-jakarta-sans", label: "Plus Jakarta Sans", fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' },
-    { value: "poppins", label: "Poppins", fontFamily: '"Poppins", system-ui, sans-serif' },
-    { value: "public-sans", label: "Public Sans", fontFamily: '"Public Sans", system-ui, sans-serif' },
-    { value: "raleway", label: "Raleway", fontFamily: '"Raleway", system-ui, sans-serif' },
-    { value: "roboto", label: "Roboto", fontFamily: '"Roboto", system-ui, sans-serif' },
-    { value: "space-grotesk", label: "Space Grotesk", fontFamily: '"Space Grotesk", system-ui, sans-serif' },
-];
-
+        { value: "bricolage-grotesque", label: "Bricolage Grotesque", fontFamily: '"Bricolage Grotesque", system-ui, sans-serif' },
+        { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
+        { value: "figtree", label: "Figtree", fontFamily: '"Figtree", system-ui, sans-serif' },
+        { value: "geist-sans", label: "Geist Sans", fontFamily: '"Geist", system-ui, sans-serif' },
+        { value: "google-sans", label: "Google Sans", fontFamily: '"Google Sans", system-ui, sans-serif' },
+        { value: "inter", label: "Inter", fontFamily: '"Inter", system-ui, sans-serif' },
+        { value: "jetbrains-mono", label: "JetBrains Mono", fontFamily: '"JetBrains Mono", ui-monospace, monospace' },
+        { value: "manrope", label: "Manrope", fontFamily: '"Manrope", system-ui, sans-serif' },
+        { value: "noto-sans", label: "Noto Sans", fontFamily: '"Noto Sans", system-ui, sans-serif' },
+        { value: "nunito-sans", label: "Nunito Sans", fontFamily: '"Nunito Sans", system-ui, sans-serif' },
+        { value: "outfit", label: "Outfit", fontFamily: '"Outfit", system-ui, sans-serif' },
+        { value: "plus-jakarta-sans", label: "Plus Jakarta Sans", fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' },
+        { value: "poppins", label: "Poppins", fontFamily: '"Poppins", system-ui, sans-serif' },
+        { value: "public-sans", label: "Public Sans", fontFamily: '"Public Sans", system-ui, sans-serif' },
+        { value: "raleway", label: "Raleway", fontFamily: '"Raleway", system-ui, sans-serif' },
+        { value: "roboto", label: "Roboto", fontFamily: '"Roboto", system-ui, sans-serif' },
+        { value: "space-grotesk", label: "Space Grotesk", fontFamily: '"Space Grotesk", system-ui, sans-serif' },
+    ];
 export function applyFont(fontFamily: FontFamily): void {
     const font = FONT_OPTIONS.find(f => f.value === fontFamily);
     if (font) {
@@ -147,8 +147,8 @@ async function fetchDefaultPath(): Promise<string> {
 }
 
 const SETTINGS_KEY = "spotiflac-settings";
-
-export function getSettings(): Settings {
+let cachedSettings: Settings | null = null;
+function getSettingsFromLocalStorage(): Settings {
     try {
         const stored = localStorage.getItem(SETTINGS_KEY);
         if (stored) {
@@ -199,19 +199,101 @@ export function getSettings(): Settings {
             if (!('qobuzQuality' in parsed)) {
                 parsed.qobuzQuality = "6";
             }
+            if (parsed.qobuzQuality === "27") {
+                parsed.qobuzQuality = "6";
+            }
             if (!('amazonQuality' in parsed)) {
-                parsed.amazonQuality = "HI_RES";
+                parsed.amazonQuality = "original";
             }
             return { ...DEFAULT_SETTINGS, ...parsed };
         }
     }
     catch (error) {
-        console.error("Failed to load settings:", error);
+        console.error("Failed to load settings from local storage:", error);
     }
     return DEFAULT_SETTINGS;
 }
 
 // Parse template and replace variables with actual values
+export function getSettings(): Settings {
+    if (cachedSettings)
+        return cachedSettings;
+    return getSettingsFromLocalStorage();
+}
+export async function loadSettings(): Promise<Settings> {
+    try {
+        const backendSettings = await LoadSettings();
+        if (backendSettings) {
+            const parsed = backendSettings as any;
+            if ('darkMode' in parsed && !('themeMode' in parsed)) {
+                parsed.themeMode = parsed.darkMode ? 'dark' : 'light';
+                delete parsed.darkMode;
+            }
+            if (!('folderPreset' in parsed) && ('artistSubfolder' in parsed || 'albumSubfolder' in parsed)) {
+                const hasArtist = parsed.artistSubfolder;
+                const hasAlbum = parsed.albumSubfolder;
+                if (hasArtist && hasAlbum) {
+                    parsed.folderPreset = "artist-album";
+                    parsed.folderTemplate = "{artist}/{album}";
+                }
+                else if (hasArtist) {
+                    parsed.folderPreset = "artist";
+                    parsed.folderTemplate = "{artist}";
+                }
+                else if (hasAlbum) {
+                    parsed.folderPreset = "album";
+                    parsed.folderTemplate = "{album}";
+                }
+                else {
+                    parsed.folderPreset = "none";
+                    parsed.folderTemplate = "";
+                }
+            }
+            if (!('filenamePreset' in parsed) && 'filenameFormat' in parsed) {
+                const format = parsed.filenameFormat;
+                if (format === "title-artist") {
+                    parsed.filenamePreset = "artist-title";
+                    parsed.filenameTemplate = "{artist} - {title}";
+                }
+                else if (format === "artist-title") {
+                    parsed.filenamePreset = "artist-title";
+                    parsed.filenameTemplate = "{artist} - {title}";
+                }
+                else {
+                    parsed.filenamePreset = "title";
+                    parsed.filenameTemplate = "{title}";
+                }
+            }
+            parsed.operatingSystem = detectOS();
+            if (!('tidalQuality' in parsed)) {
+                parsed.tidalQuality = "LOSSLESS";
+            }
+            if (!('qobuzQuality' in parsed)) {
+                parsed.qobuzQuality = "6";
+            }
+            if (parsed.qobuzQuality === "27") {
+                parsed.qobuzQuality = "6";
+            }
+            if (!('amazonQuality' in parsed)) {
+                parsed.amazonQuality = "original";
+            }
+            cachedSettings = { ...DEFAULT_SETTINGS, ...parsed };
+            return cachedSettings!;
+        }
+    }
+    catch (error) {
+        console.error("Failed to load settings from backend:", error);
+    }
+    const local = getSettingsFromLocalStorage();
+    try {
+        await SaveToBackend(local as any);
+        cachedSettings = local;
+    }
+    catch (error) {
+        console.error("Failed to migrate settings to backend:", error);
+    }
+    return local;
+}
 export interface TemplateData {
     artist?: string;
     album?: string;
@@ -239,16 +321,18 @@ export function parseTemplate(template: string, data: TemplateData): string {
 }
 
 export async function getSettingsWithDefaults(): Promise<Settings> {
-    const settings = getSettings();
+    const settings = await loadSettings();
     if (!settings.downloadPath) {
         settings.downloadPath = await fetchDefaultPath();
+        await saveSettings(settings);
     }
     return settings;
 }
-
-export function saveSettings(settings: Settings): void {
+export async function saveSettings(settings: Settings): Promise<void> {
     try {
+        cachedSettings = settings;
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        await SaveToBackend(settings as any);
     }
     catch (error) {
         console.error("Failed to save settings:", error);
@@ -256,16 +340,17 @@ export function saveSettings(settings: Settings): void {
 }
 
 export function updateSettings(partial: Partial<Settings>): Settings {
+export async function updateSettings(partial: Partial<Settings>): Promise<Settings> {
     const current = getSettings();
     const updated = { ...current, ...partial };
-    saveSettings(updated);
+    await saveSettings(updated);
     return updated;
 }
 
 export async function resetToDefaultSettings(): Promise<Settings> {
     const defaultPath = await fetchDefaultPath();
     const defaultSettings = { ...DEFAULT_SETTINGS, downloadPath: defaultPath };
-    saveSettings(defaultSettings);
+    await saveSettings(defaultSettings);
     return defaultSettings;
 }
 

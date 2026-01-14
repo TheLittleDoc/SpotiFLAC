@@ -48,7 +48,7 @@ export function useDownload() {
     const shouldStopDownloadRef = useRef(false);
     const downloadWithAutoFallback = async (isrc: string, settings: any, trackName?: string, artistName?: string, albumName?: string, playlistName?: string, position?: number, spotifyId?: string, durationMs?: number, releaseYear?: string, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string) => {
         const service = settings.downloader;
-        const query = trackName && artistName ? `${trackName} ${artistName}` : undefined;
+        const query = trackName && artistName ? `${trackName} ${artistName} ` : undefined;
         const os = settings.operatingSystem;
         let outputDir = settings.downloadPath;
         let useAlbumTrackNumber = false;
@@ -86,7 +86,9 @@ export function useDownload() {
             year: yearValue,
             playlist: playlistName?.replace(/\//g, placeholder),
         };
-        if (playlistName) {
+        const folderTemplate = settings.folderTemplate || "";
+        const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
+        if (playlistName && !useAlbumSubfolder) {
             outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
         }
         if (settings.folderTemplate) {
@@ -351,7 +353,8 @@ export function useDownload() {
             year: yearValue,
             playlist: folderName?.replace(/\//g, placeholder),
         };
-        if (folderName && !isAlbum) {
+        const useAlbumTag = settings.folderTemplate?.includes("{album}");
+        if (folderName && (!isAlbum || !useAlbumTag)) {
             outputDir = joinPath(os, outputDir, sanitizePath(folderName.replace(/\//g, " "), os));
         }
         if (settings.folderTemplate) {
@@ -580,7 +583,8 @@ export function useDownload() {
         setDownloadProgress(0);
         let outputDir = settings.downloadPath;
         const os = settings.operatingSystem;
-        if (folderName && !isAlbum) {
+        const useAlbumTag = settings.folderTemplate?.includes("{album}");
+        if (folderName && (!isAlbum || !useAlbumTag)) {
             outputDir = joinPath(os, outputDir, sanitizePath(folderName.replace(/\//g, " "), os));
         }
         const selectedTrackObjects = selectedTracks
@@ -728,7 +732,8 @@ export function useDownload() {
         setDownloadProgress(0);
         let outputDir = settings.downloadPath;
         const os = settings.operatingSystem;
-        if (folderName && !isAlbum) {
+        const useAlbumTag = settings.folderTemplate?.includes("{album}");
+        if (folderName && (!isAlbum || !useAlbumTag)) {
             outputDir = joinPath(os, outputDir, sanitizePath(folderName.replace(/\//g, " "), os));
         }
         logger.info(`checking existing files in parallel...`);

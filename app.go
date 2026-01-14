@@ -7,10 +7,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"spotiflac/backend"
 	"strings"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+var isrcRegex = regexp.MustCompile(`^[A-Z]{2}[A-Z0-9]{3}\d{2}\d{5}$`)
+
+func isValidISRC(isrc string) bool {
+	return isrcRegex.MatchString(isrc)
+}
 
 type App struct {
 	ctx context.Context
@@ -307,8 +316,8 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	case "amazon":
 		downloader := backend.NewAmazonDownloader()
 		if req.ServiceURL != "" {
-			// Use provided URL directly
-			filename, err = downloader.DownloadByURL(req.ServiceURL, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.CoverURL, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.EmbedMaxQualityCover, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL)
+
+			filename, err = downloader.DownloadByURL(req.ServiceURL, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.CoverURL, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.EmbedMaxQualityCover, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL)
 		} else {
 			if req.SpotifyID == "" {
 				return DownloadResponse{
@@ -316,7 +325,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 					Error:   "Spotify ID is required for Amazon Music",
 				}, fmt.Errorf("spotify ID is required for Amazon Music")
 			}
-			filename, err = downloader.DownloadBySpotifyID(req.SpotifyID, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.CoverURL, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.EmbedMaxQualityCover, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL)
+			filename, err = downloader.DownloadBySpotifyID(req.SpotifyID, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.CoverURL, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.EmbedMaxQualityCover, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL)
 		}
 
 	case "tidal":
@@ -361,6 +370,11 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}
 
 		deezerISRC := req.ISRC
+
+		if len(deezerISRC) != 12 || !isValidISRC(deezerISRC) {
+			deezerISRC = ""
+		}
+
 		if deezerISRC == "" && req.SpotifyID != "" {
 
 			songlinkClient := backend.NewSongLinkClient()
@@ -395,6 +409,8 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	}
 
 	if err != nil {
+		backend.FailDownloadItem(itemID, fmt.Sprintf("Download failed: %v", err))
+
 		// Clean up any partial/corrupted file that was created during failed download
 		if filename != "" && !strings.HasPrefix(filename, "EXISTS:") {
 			// Check if file exists and delete it
@@ -882,16 +898,19 @@ type DownloadFFmpegResponse struct {
 
 // DownloadFFmpeg downloads and installs ffmpeg
 func (a *App) DownloadFFmpeg() DownloadFFmpegResponse {
+	runtime.EventsEmit(a.ctx, "ffmpeg:status", "starting")
 	err := backend.DownloadFFmpeg(func(progress int) {
-		fmt.Printf("[FFmpeg] Download progress: %d%%\n", progress)
+		runtime.EventsEmit(a.ctx, "ffmpeg:progress", progress)
 	})
 	if err != nil {
+		runtime.EventsEmit(a.ctx, "ffmpeg:status", "failed")
 		return DownloadFFmpegResponse{
 			Success: false,
 			Error:   err.Error(),
 		}
 	}
 
+	runtime.EventsEmit(a.ctx, "ffmpeg:status", "completed")
 	return DownloadFFmpegResponse{
 		Success: true,
 		Message: "FFmpeg installed successfully",
@@ -1116,4 +1135,64 @@ func (a *App) CheckFilesExistence(outputDir string, tracks []CheckFileExistenceR
 // SkipDownloadItem marks a download item as skipped (file already exists)
 func (a *App) SkipDownloadItem(itemID, filePath string) {
 	backend.SkipDownloadItem(itemID, filePath)
+}
+
+func (a *App) GetPreviewURL(trackID string) (string, error) {
+	return backend.GetPreviewURL(trackID)
+}
+
+func (a *App) GetConfigPath() (string, error) {
+	dir, err := backend.GetFFmpegDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.json"), nil
+}
+
+func (a *App) SaveSettings(settings map[string]interface{}) error {
+	configPath, err := a.GetConfigPath()
+	if err != nil {
+		return err
+	}
+
+	dir := filepath.Dir(configPath)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(configPath, data, 0644)
+}
+
+func (a *App) LoadSettings() (map[string]interface{}, error) {
+	configPath, err := a.GetConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return nil, nil
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var settings map[string]interface{}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return nil, err
+	}
+
+	return settings, nil
+}
+
+func (a *App) CheckFFmpegInstalled() (bool, error) {
+	return backend.IsFFmpegInstalled()
 }
