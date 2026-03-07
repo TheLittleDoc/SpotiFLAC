@@ -4,7 +4,7 @@ export type FolderPreset = "none" | "artist" | "album" | "year-album" | "year-ar
 export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-title" | "track-title-artist" | "track-artist-title" | "title-album-artist" | "track-title-album-artist" | "artist-album-title" | "track-dash-title" | "disc-track-title" | "disc-track-title-artist" | "custom";
 export interface Settings {
     downloadPath: string;
-    downloader: "auto" | "tidal" | "qobuz" | "amazon";
+    downloader: "auto" | "tidal" | "qobuz" | "amazon" | "deezer";
     theme: string;
     themeMode: "auto" | "light" | "dark";
     fontFamily: FontFamily;
@@ -24,7 +24,17 @@ export interface Settings {
     operatingSystem: "Windows" | "linux/MacOS";
     tidalQuality: "LOSSLESS" | "HI_RES_LOSSLESS";
     qobuzQuality: "6" | "7" | "27";
-    amazonQuality: "HI_RES";
+    amazonQuality: "original";
+    autoOrder: "tidal-qobuz-amazon-deezer" | "tidal-qobuz-deezer-amazon" | "tidal-amazon-qobuz-deezer" | "tidal-amazon-deezer-qobuz" | "tidal-deezer-qobuz-amazon" | "tidal-deezer-amazon-qobuz" | "qobuz-tidal-amazon-deezer" | "qobuz-tidal-deezer-amazon" | "qobuz-amazon-tidal-deezer" | "qobuz-amazon-deezer-tidal" | "qobuz-deezer-tidal-amazon" | "qobuz-deezer-amazon-tidal" | "amazon-tidal-qobuz-deezer" | "amazon-tidal-deezer-qobuz" | "amazon-qobuz-tidal-deezer" | "amazon-qobuz-deezer-tidal" | "amazon-deezer-tidal-qobuz" | "amazon-deezer-qobuz-tidal" | "deezer-tidal-qobuz-amazon" | "deezer-tidal-amazon-qobuz" | "deezer-qobuz-tidal-amazon" | "deezer-qobuz-amazon-tidal" | "deezer-amazon-tidal-qobuz" | "deezer-amazon-qobuz-tidal" | string;
+    autoQuality: "16" | "24";
+    allowFallback: boolean;
+    useSpotFetchAPI: boolean;
+    spotFetchAPIUrl: string;
+    createPlaylistFolder: boolean;
+    createM3u8File: boolean;
+    useFirstArtistOnly: boolean;
+    useSingleGenre: boolean;
+    embedGenre: boolean;
 }
 export const FOLDER_PRESETS: Record<FolderPreset, {
     label: string;
@@ -74,6 +84,7 @@ export const TEMPLATE_VARIABLES = [
     { key: "{track}", description: "Track number", example: "01" },
     { key: "{disc}", description: "Disc number", example: "1" },
     { key: "{year}", description: "Release year", example: "2014" },
+    { key: "{date}", description: "Release date (YYYY-MM-DD)", example: "2014-10-27" },
 ];
 
 // Auto-detect operating system
@@ -102,31 +113,41 @@ export const DEFAULT_SETTINGS: Settings = {
     operatingSystem: detectOS(),
     tidalQuality: "LOSSLESS",
     qobuzQuality: "6",
-    amazonQuality: "HI_RES"
+    amazonQuality: "original",
+    autoOrder: "tidal-qobuz-amazon-deezer",
+    autoQuality: "16",
+    allowFallback: true,
+    useSpotFetchAPI: false,
+    spotFetchAPIUrl: "https://spotify.afkarxyz.fun/api",
+    createPlaylistFolder: true,
+    createM3u8File: false,
+    useFirstArtistOnly: false,
+    useSingleGenre: false,
+    embedGenre: true
 };
 export const FONT_OPTIONS: {
     value: FontFamily;
     label: string;
     fontFamily: string;
 }[] = [
-        { value: "bricolage-grotesque", label: "Bricolage Grotesque", fontFamily: '"Bricolage Grotesque", system-ui, sans-serif' },
-        { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
-        { value: "figtree", label: "Figtree", fontFamily: '"Figtree", system-ui, sans-serif' },
-        { value: "geist-sans", label: "Geist Sans", fontFamily: '"Geist", system-ui, sans-serif' },
-        { value: "google-sans", label: "Google Sans", fontFamily: '"Google Sans", system-ui, sans-serif' },
-        { value: "inter", label: "Inter", fontFamily: '"Inter", system-ui, sans-serif' },
-        { value: "jetbrains-mono", label: "JetBrains Mono", fontFamily: '"JetBrains Mono", ui-monospace, monospace' },
-        { value: "manrope", label: "Manrope", fontFamily: '"Manrope", system-ui, sans-serif' },
-        { value: "noto-sans", label: "Noto Sans", fontFamily: '"Noto Sans", system-ui, sans-serif' },
-        { value: "nunito-sans", label: "Nunito Sans", fontFamily: '"Nunito Sans", system-ui, sans-serif' },
-        { value: "outfit", label: "Outfit", fontFamily: '"Outfit", system-ui, sans-serif' },
-        { value: "plus-jakarta-sans", label: "Plus Jakarta Sans", fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' },
-        { value: "poppins", label: "Poppins", fontFamily: '"Poppins", system-ui, sans-serif' },
-        { value: "public-sans", label: "Public Sans", fontFamily: '"Public Sans", system-ui, sans-serif' },
-        { value: "raleway", label: "Raleway", fontFamily: '"Raleway", system-ui, sans-serif' },
-        { value: "roboto", label: "Roboto", fontFamily: '"Roboto", system-ui, sans-serif' },
-        { value: "space-grotesk", label: "Space Grotesk", fontFamily: '"Space Grotesk", system-ui, sans-serif' },
-    ];
+    { value: "bricolage-grotesque", label: "Bricolage Grotesque", fontFamily: '"Bricolage Grotesque", system-ui, sans-serif' },
+    { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
+    { value: "figtree", label: "Figtree", fontFamily: '"Figtree", system-ui, sans-serif' },
+    { value: "geist-sans", label: "Geist Sans", fontFamily: '"Geist", system-ui, sans-serif' },
+    { value: "google-sans", label: "Google Sans", fontFamily: '"Google Sans", system-ui, sans-serif' },
+    { value: "inter", label: "Inter", fontFamily: '"Inter", system-ui, sans-serif' },
+    { value: "jetbrains-mono", label: "JetBrains Mono", fontFamily: '"JetBrains Mono", ui-monospace, monospace' },
+    { value: "manrope", label: "Manrope", fontFamily: '"Manrope", system-ui, sans-serif' },
+    { value: "noto-sans", label: "Noto Sans", fontFamily: '"Noto Sans", system-ui, sans-serif' },
+    { value: "nunito-sans", label: "Nunito Sans", fontFamily: '"Nunito Sans", system-ui, sans-serif' },
+    { value: "outfit", label: "Outfit", fontFamily: '"Outfit", system-ui, sans-serif' },
+    { value: "plus-jakarta-sans", label: "Plus Jakarta Sans", fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' },
+    { value: "poppins", label: "Poppins", fontFamily: '"Poppins", system-ui, sans-serif' },
+    { value: "public-sans", label: "Public Sans", fontFamily: '"Public Sans", system-ui, sans-serif' },
+    { value: "raleway", label: "Raleway", fontFamily: '"Raleway", system-ui, sans-serif' },
+    { value: "roboto", label: "Roboto", fontFamily: '"Roboto", system-ui, sans-serif' },
+    { value: "space-grotesk", label: "Space Grotesk", fontFamily: '"Space Grotesk", system-ui, sans-serif' },
+];
 export function applyFont(fontFamily: FontFamily): void {
     const font = FONT_OPTIONS.find(f => f.value === fontFamily);
     if (font) {
@@ -134,7 +155,6 @@ export function applyFont(fontFamily: FontFamily): void {
         document.body.style.fontFamily = font.fontFamily;
     }
 }
-
 async function fetchDefaultPath(): Promise<string> {
     try {
         const data = await GetDefaults();
@@ -145,7 +165,6 @@ async function fetchDefaultPath(): Promise<string> {
         return "";
     }
 }
-
 const SETTINGS_KEY = "spotiflac-settings";
 let cachedSettings: Settings | null = null;
 function getSettingsFromLocalStorage(): Settings {
@@ -199,11 +218,17 @@ function getSettingsFromLocalStorage(): Settings {
             if (!('qobuzQuality' in parsed)) {
                 parsed.qobuzQuality = "6";
             }
-            if (parsed.qobuzQuality === "27") {
-                parsed.qobuzQuality = "6";
-            }
             if (!('amazonQuality' in parsed)) {
                 parsed.amazonQuality = "original";
+            }
+            if (!('autoOrder' in parsed)) {
+                parsed.autoOrder = "tidal-qobuz-amazon";
+            }
+            if (!('autoQuality' in parsed)) {
+                parsed.autoQuality = "16";
+            }
+            if (!('allowFallback' in parsed)) {
+                parsed.allowFallback = true;
             }
             return { ...DEFAULT_SETTINGS, ...parsed };
         }
@@ -213,8 +238,6 @@ function getSettingsFromLocalStorage(): Settings {
     }
     return DEFAULT_SETTINGS;
 }
-
-// Parse template and replace variables with actual values
 export function getSettings(): Settings {
     if (cachedSettings)
         return cachedSettings;
@@ -271,11 +294,32 @@ export async function loadSettings(): Promise<Settings> {
             if (!('qobuzQuality' in parsed)) {
                 parsed.qobuzQuality = "6";
             }
-            if (parsed.qobuzQuality === "27") {
-                parsed.qobuzQuality = "6";
-            }
             if (!('amazonQuality' in parsed)) {
                 parsed.amazonQuality = "original";
+            }
+            if (!('autoOrder' in parsed)) {
+                parsed.autoOrder = "tidal-qobuz-amazon";
+            }
+            if (!('autoQuality' in parsed)) {
+                parsed.autoQuality = "16";
+            }
+            if (!('allowFallback' in parsed)) {
+                parsed.allowFallback = true;
+            }
+            if (!('createPlaylistFolder' in parsed)) {
+                parsed.createPlaylistFolder = true;
+            }
+            if (!('createM3u8File' in parsed)) {
+                parsed.createM3u8File = false;
+            }
+            if (!('useFirstArtistOnly' in parsed)) {
+                parsed.useFirstArtistOnly = false;
+            }
+            if (!('useSingleGenre' in parsed)) {
+                parsed.useSingleGenre = false;
+            }
+            if (!('embedGenre' in parsed)) {
+                parsed.embedGenre = true;
             }
             cachedSettings = { ...DEFAULT_SETTINGS, ...parsed };
             return cachedSettings!;
@@ -302,9 +346,9 @@ export interface TemplateData {
     track?: number;
     disc?: number;
     year?: string;
+    date?: string;
     playlist?: string;
 }
-
 export function parseTemplate(template: string, data: TemplateData): string {
     if (!template)
         return "";
@@ -316,10 +360,10 @@ export function parseTemplate(template: string, data: TemplateData): string {
     result = result.replace(/\{track\}/g, data.track ? String(data.track).padStart(2, "0") : "00");
     result = result.replace(/\{disc\}/g, data.disc ? String(data.disc) : "1");
     result = result.replace(/\{year\}/g, data.year || "0000");
+    result = result.replace(/\{date\}/g, data.date || "0000-00-00");
     result = result.replace(/\{playlist\}/g, data.playlist || "");
     return result;
 }
-
 export async function getSettingsWithDefaults(): Promise<Settings> {
     const settings = await loadSettings();
     if (!settings.downloadPath) {
@@ -333,27 +377,25 @@ export async function saveSettings(settings: Settings): Promise<void> {
         cachedSettings = settings;
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
         await SaveToBackend(settings as any);
+        window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: settings }));
     }
     catch (error) {
         console.error("Failed to save settings:", error);
     }
 }
 
-export function updateSettings(partial: Partial<Settings>): Settings {
 export async function updateSettings(partial: Partial<Settings>): Promise<Settings> {
     const current = getSettings();
     const updated = { ...current, ...partial };
     await saveSettings(updated);
     return updated;
 }
-
 export async function resetToDefaultSettings(): Promise<Settings> {
     const defaultPath = await fetchDefaultPath();
     const defaultSettings = { ...DEFAULT_SETTINGS, downloadPath: defaultPath };
     await saveSettings(defaultSettings);
     return defaultSettings;
 }
-
 export function applyThemeMode(mode: "auto" | "light" | "dark"): void {
     if (mode === "auto") {
         const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
