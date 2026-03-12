@@ -252,6 +252,7 @@ type apiPlaylistResponse struct {
 		Duration    string   `json:"duration"`
 		IsExplicit  bool     `json:"is_explicit"`
 		DiscNumber  int      `json:"disc_number"`
+		IsInList    bool     `json:"is_in_list"`
 	} `json:"tracks"`
 }
 
@@ -640,13 +641,11 @@ func (c *SpotifyMetadataClient) fetchPlaylist(ctx context.Context, playlistID st
 		playlistData := getMap(getMap(response, "data"), "playlistV2")
 		content := getMap(playlistData, "content")
 		items := getSlice(content, "items")
-
 		if items == nil || len(items) == 0 {
 			break
 		}
 
 		allItems = append(allItems, items...)
-
 		if totalCount == nil {
 			if tc, ok := content["totalCount"].(float64); ok {
 				totalCount = int(tc)
@@ -694,6 +693,9 @@ func (c *SpotifyMetadataClient) fetchPlaylist(ctx context.Context, playlistID st
 
 func (c *SpotifyMetadataClient) fetchPlaylistAlbums(ctx context.Context, playlistID string) (*apiPlaylistResponse, error) {
 	playlistData, _ := c.fetchPlaylist(ctx, playlistID)
+	for i := range playlistData.Tracks {
+		playlistData.Tracks[i].IsInList = true
+	}
 
 	for _, track := range playlistData.Tracks {
 		albumID := track.AlbumID
@@ -702,16 +704,20 @@ func (c *SpotifyMetadataClient) fetchPlaylistAlbums(ctx context.Context, playlis
 			for _, albumTrack := range albumData.Tracks {
 				if albumTrack.ID != track.ID {
 					playlistData.Tracks = append(playlistData.Tracks, struct {
-						ID        string   `json:"id"`
-						Cover     string   `json:"cover"`
-						Title     string   `json:"title"`
-						Artist    string   `json:"artist"`
-						ArtistIds []string `json:"artistIds"`
-						Plays     string   `json:"plays"`
-						Status    string   `json:"status"`
-						Album     string   `json:"album"`
-						AlbumID   string   `json:"albumId"`
-						Duration  string   `json:"duration"`
+						ID          string   `json:"id"`
+						Cover       string   `json:"cover"`
+						Title       string   `json:"title"`
+						Artist      string   `json:"artist"`
+						ArtistIds   []string `json:"artistIds"`
+						Plays       string   `json:"plays"`
+						Status      string   `json:"status"`
+						Album       string   `json:"album"`
+						AlbumArtist string   `json:"albumArtist"`
+						AlbumID     string   `json:"albumId"`
+						Duration    string   `json:"duration"`
+						IsExplicit  bool     `json:"is_explicit"`
+						DiscNumber  int      `json:"disc_number"`
+						IsInList    bool     `json:"is_in_list"`
 					}{
 						ID:        albumTrack.ID,
 						Cover:     track.Cover,
@@ -723,6 +729,7 @@ func (c *SpotifyMetadataClient) fetchPlaylistAlbums(ctx context.Context, playlis
 						Album:     track.Album,
 						AlbumID:   track.AlbumID,
 						Duration:  albumTrack.Duration,
+						IsInList:  false,
 					})
 				}
 			}

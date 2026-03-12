@@ -821,7 +821,8 @@ export function useDownload(region: string) {
         shouldStopDownloadRef.current = false;
         const { CancelAllQueuedItems } = await import("../../wailsjs/go/main/App");
         await CancelAllQueuedItems();
-        if (settings.createM3u8File && folderName) {
+        if (settings.createM3u8File && folderName && !isAlbum) {
+            // remove any tracks where IsInList == false
             const paths = selectedTrackObjects.map((t) => finalFilePaths.get(t.spotify_id || "") || "").filter((p) => p !== "");
             if (paths.length > 0) {
                 try {
