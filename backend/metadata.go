@@ -21,6 +21,7 @@ type Metadata struct {
 	Artist      string
 	Album       string
 	AlbumArtist string
+	Separator   string
 	Date        string
 	ReleaseDate string
 	TrackNumber int
@@ -28,13 +29,75 @@ type Metadata struct {
 	DiscNumber  int
 	TotalDiscs  int
 	URL         string
+	Comment     string
 	Copyright   string
 	Publisher   string
+	Composer    string
 	Lyrics      string
 	Description string
 	ISRC        string
+	UPC         string
 	Genre       string
 	SongLength  int
+}
+
+func resolveMetadataSeparator(separator string) string {
+	if normalized := normalizeArtistSeparator(separator); normalized != "" {
+		return normalized
+	}
+
+	return normalizeArtistSeparator(GetSeparator())
+}
+
+func displayMetadataSeparator(separator string) string {
+	if resolved := resolveMetadataSeparator(separator); resolved != "" {
+		return resolved + " "
+	}
+
+	return "; "
+}
+
+func addVorbisTagValues(cmt *flacvorbis.MetaDataBlockVorbisComment, key string, values []string) {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+
+		_ = cmt.Add(key, value)
+	}
+}
+
+func addMP3TextFrame(tag *id3v2.Tag, frameID string, value string) {
+	tag.DeleteFrames(frameID)
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+
+	tag.AddTextFrame(frameID, id3v2.EncodingUTF8, value)
+}
+
+func joinMultiValueText(values []string, separator string, nullSeparated bool) string {
+	cleaned := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			cleaned = append(cleaned, value)
+		}
+	}
+
+	if len(cleaned) == 0 {
+		return ""
+	}
+	if len(cleaned) == 1 {
+		return cleaned[0]
+	}
+	if nullSeparated {
+		return strings.Join(cleaned, "\x00")
+	}
+
+	return strings.Join(cleaned, displayMetadataSeparator(separator))
 }
 
 func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
@@ -52,17 +115,22 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 	}
 
 	cmt := flacvorbis.New()
+	separator := resolveMetadataSeparator(metadata.Separator)
 
 	if metadata.Title != "" {
 		_ = cmt.Add(flacvorbis.FIELD_TITLE, metadata.Title)
 	}
-	if metadata.Artist != "" {
+	if artistValues := SplitArtistCredits(metadata.Artist, separator); len(artistValues) > 0 {
+		addVorbisTagValues(cmt, flacvorbis.FIELD_ARTIST, artistValues)
+	} else if metadata.Artist != "" {
 		_ = cmt.Add(flacvorbis.FIELD_ARTIST, metadata.Artist)
 	}
 	if metadata.Album != "" {
 		_ = cmt.Add(flacvorbis.FIELD_ALBUM, metadata.Album)
 	}
-	if metadata.AlbumArtist != "" {
+	if albumArtistValues := SplitArtistCredits(metadata.AlbumArtist, separator); len(albumArtistValues) > 0 {
+		addVorbisTagValues(cmt, "ALBUMARTIST", albumArtistValues)
+	} else if metadata.AlbumArtist != "" {
 		_ = cmt.Add("ALBUMARTIST", metadata.AlbumArtist)
 	}
 	if metadata.Date != "" {
@@ -86,15 +154,28 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 	if metadata.Publisher != "" {
 		_ = cmt.Add("PUBLISHER", metadata.Publisher)
 	}
+	if composerValues := SplitArtistCredits(metadata.Composer, separator); len(composerValues) > 0 {
+		addVorbisTagValues(cmt, "COMPOSER", composerValues)
+	} else if metadata.Composer != "" {
+		_ = cmt.Add("COMPOSER", metadata.Composer)
+	}
 	if metadata.Description != "" {
 		_ = cmt.Add("DESCRIPTION", metadata.Description)
+	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		_ = cmt.Add("COMMENT", comment)
 	}
 
 	if metadata.ISRC != "" {
 		_ = cmt.Add("ISRC", metadata.ISRC)
 	}
+	if metadata.UPC != "" {
+		_ = cmt.Add(preferredUPCTagKey, metadata.UPC)
+	}
 
-	if metadata.Genre != "" {
+	if genreValues := SplitMetadataValues(metadata.Genre, separator); len(genreValues) > 0 {
+		addVorbisTagValues(cmt, "GENRE", genreValues)
+	} else if metadata.Genre != "" {
 		_ = cmt.Add("GENRE", metadata.Genre)
 	}
 
@@ -215,6 +296,14 @@ func extractYear(releaseDate string) string {
 		return releaseDate[:4]
 	}
 	return releaseDate
+}
+
+func resolveMetadataComment(metadata Metadata) string {
+	if comment := strings.TrimSpace(metadata.Comment); comment != "" {
+		return comment
+	}
+
+	return strings.TrimSpace(metadata.URL)
 }
 
 func EmbedLyricsOnly(filepath string, lyrics string) error {
@@ -940,14 +1029,26 @@ func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
 			metadata.Copyright = value
 		case "publisher", "tpub", "label":
 			metadata.Publisher = value
+		case "composer", "writer", "wm/composer", "©wrt":
+			metadata.Composer = value
+		case "genre", "tcon":
+			metadata.Genre = value
 		case "url":
 			metadata.URL = value
-		case "description", "comment":
+		case "isrc", "tsrc":
+			metadata.ISRC = value
+		case "comment", "comments":
+			if metadata.Comment == "" {
+				metadata.Comment = value
+			}
+		case "description":
 			if metadata.Description == "" {
 				metadata.Description = value
 			}
 		}
 	}
+
+	metadata.UPC = firstPreferredFFprobeUPCValue(allTags)
 
 	return metadata, nil
 }
@@ -975,14 +1076,12 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 		return fmt.Errorf("failed to open MP3 file: %w", err)
 	}
 	defer tag.Close()
+	separator := resolveMetadataSeparator(metadata.Separator)
 
 	tag.DeleteFrames("TXXX")
 
 	if metadata.Title != "" {
 		tag.SetTitle(metadata.Title)
-	}
-	if metadata.Artist != "" {
-		tag.SetArtist(metadata.Artist)
 	}
 	if metadata.Album != "" {
 		tag.SetAlbum(metadata.Album)
@@ -995,10 +1094,17 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 		tag.SetYear(year)
 	}
 
-	if metadata.AlbumArtist != "" {
-		tag.DeleteFrames("TPE2")
-		tag.AddTextFrame("TPE2", id3v2.EncodingUTF8, metadata.AlbumArtist)
+	artistText := joinMultiValueText(SplitArtistCredits(metadata.Artist, separator), separator, true)
+	if artistText == "" {
+		artistText = strings.TrimSpace(metadata.Artist)
 	}
+	addMP3TextFrame(tag, "TPE1", artistText)
+
+	albumArtistText := joinMultiValueText(SplitArtistCredits(metadata.AlbumArtist, separator), separator, true)
+	if albumArtistText == "" {
+		albumArtistText = strings.TrimSpace(metadata.AlbumArtist)
+	}
+	addMP3TextFrame(tag, "TPE2", albumArtistText)
 
 	if metadata.TrackNumber > 0 {
 		tag.DeleteFrames(tag.CommonID("Track number/Position in set"))
@@ -1019,18 +1125,38 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 	}
 
 	if metadata.Copyright != "" {
-		tag.DeleteFrames("TCOP")
-		tag.AddTextFrame("TCOP", id3v2.EncodingUTF8, metadata.Copyright)
+		addMP3TextFrame(tag, "TCOP", metadata.Copyright)
 	}
 
 	if metadata.Publisher != "" {
-		tag.DeleteFrames("TPUB")
-		tag.AddTextFrame("TPUB", id3v2.EncodingUTF8, metadata.Publisher)
+		addMP3TextFrame(tag, "TPUB", metadata.Publisher)
 	}
 
+	composerText := joinMultiValueText(SplitArtistCredits(metadata.Composer, separator), separator, true)
+	if composerText == "" {
+		composerText = strings.TrimSpace(metadata.Composer)
+	}
+	addMP3TextFrame(tag, "TCOM", composerText)
+
 	if metadata.ISRC != "" {
-		tag.DeleteFrames("TSRC")
-		tag.AddTextFrame("TSRC", id3v2.EncodingUTF8, metadata.ISRC)
+		addMP3TextFrame(tag, "TSRC", metadata.ISRC)
+	}
+	if metadata.UPC != "" {
+		tag.AddUserDefinedTextFrame(id3v2.UserDefinedTextFrame{
+			Encoding:    id3v2.EncodingUTF8,
+			Description: "UPC",
+			Value:       metadata.UPC,
+		})
+	}
+
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		tag.DeleteFrames(tag.CommonID("Comments"))
+		tag.AddCommentFrame(id3v2.CommentFrame{
+			Encoding:    id3v2.EncodingUTF8,
+			Language:    "eng",
+			Description: "",
+			Text:        comment,
+		})
 	}
 
 	if coverPath != "" && fileExists(coverPath) {
@@ -1051,6 +1177,12 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 			fmt.Printf("[EmbedMetadataToMP3] Warning: Failed to read cover art file: %v\n", err)
 		}
 	}
+
+	genreText := joinMultiValueText(SplitMetadataValues(metadata.Genre, separator), separator, true)
+	if genreText == "" {
+		genreText = strings.TrimSpace(metadata.Genre)
+	}
+	addMP3TextFrame(tag, "TCON", genreText)
 
 	if err := tag.Save(); err != nil {
 		return fmt.Errorf("failed to save MP3 tags: %w", err)
@@ -1073,6 +1205,7 @@ func embedMetadataToM4A(filePath string, metadata Metadata, coverPath string) er
 		"-i", filePath,
 		"-y",
 	}
+	separator := resolveMetadataSeparator(metadata.Separator)
 
 	if coverPath != "" && fileExists(coverPath) {
 		args = append(args, "-i", coverPath)
@@ -1084,14 +1217,22 @@ func embedMetadataToM4A(filePath string, metadata Metadata, coverPath string) er
 	if metadata.Title != "" {
 		args = append(args, "-metadata", "title="+metadata.Title)
 	}
-	if metadata.Artist != "" {
-		args = append(args, "-metadata", "artist="+metadata.Artist)
+	artistText := joinMultiValueText(SplitArtistCredits(metadata.Artist, separator), separator, false)
+	if artistText == "" {
+		artistText = strings.TrimSpace(metadata.Artist)
+	}
+	if artistText != "" {
+		args = append(args, "-metadata", "artist="+artistText)
 	}
 	if metadata.Album != "" {
 		args = append(args, "-metadata", "album="+metadata.Album)
 	}
-	if metadata.AlbumArtist != "" {
-		args = append(args, "-metadata", "album_artist="+metadata.AlbumArtist)
+	albumArtistText := joinMultiValueText(SplitArtistCredits(metadata.AlbumArtist, separator), separator, false)
+	if albumArtistText == "" {
+		albumArtistText = strings.TrimSpace(metadata.AlbumArtist)
+	}
+	if albumArtistText != "" {
+		args = append(args, "-metadata", "album_artist="+albumArtistText)
 	}
 	if metadata.Date != "" {
 		args = append(args, "-metadata", "date="+metadata.Date)
@@ -1116,8 +1257,28 @@ func embedMetadataToM4A(filePath string, metadata Metadata, coverPath string) er
 	if metadata.Publisher != "" {
 		args = append(args, "-metadata", "publisher="+metadata.Publisher)
 	}
+	composerText := joinMultiValueText(SplitArtistCredits(metadata.Composer, separator), separator, false)
+	if composerText == "" {
+		composerText = strings.TrimSpace(metadata.Composer)
+	}
+	if composerText != "" {
+		args = append(args, "-metadata", "composer="+composerText)
+	}
 	if metadata.ISRC != "" {
 		args = append(args, "-metadata", "isrc="+metadata.ISRC)
+	}
+	if metadata.UPC != "" {
+		args = append(args, "-metadata", "upc="+metadata.UPC)
+	}
+	genreText := joinMultiValueText(SplitMetadataValues(metadata.Genre, separator), separator, false)
+	if genreText == "" {
+		genreText = strings.TrimSpace(metadata.Genre)
+	}
+	if genreText != "" {
+		args = append(args, "-metadata", "genre="+genreText)
+	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		args = append(args, "-metadata", "comment="+comment)
 	}
 
 	tmpOutputFile := strings.TrimSuffix(filePath, pathfilepath.Ext(filePath)) + ".tmp" + pathfilepath.Ext(filePath)

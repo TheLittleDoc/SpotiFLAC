@@ -10,23 +10,19 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
 [![Announcements](https://img.shields.io/badge/ANNOUNCEMENTS-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/spotiflac)
 [![Chat](https://img.shields.io/badge/CHAT-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/spotiflac_chat)
 
-### [Download](https://github.com/afkarxyz/SpotiFLAC/releases)
+### [Download](https://github.com/spotbye/SpotiFLAC/releases)
 
 ![Image](https://github.com/user-attachments/assets/c2624ca5-8569-49f0-950e-4410b523cea1)
 
 ## Other projects
 
-### [SpotiFLAC Next](https://github.com/afkarxyz/SpotiFLAC-Next)
+### [SpotiFLAC Next](https://github.com/spotbye/SpotiFLAC-Next)
 
-Get Spotify tracks in true FLAC from Tidal, Qobuz, Amazon Music & Deezer — no account required.
+Get Spotify tracks in true Lossless from Tidal, Qobuz, Amazon Music, Deezer & Apple Music — no account required.
 
-### [SpotiDownloader](https://github.com/afkarxyz/SpotiDownloader)
+### [SpotubeDL.com](https://spotubedl.com)
 
-Get Spotify tracks, albums, playlists and discography in MP3 and FLAC.
-
-### [SpotubeDL](https://spotubedl.com)
-
-Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality.
+Download Spotify Tracks, Albums, Playlists & Discography as MP3/OGG/Opus.
 
 ### [SpotiFLAC (Mobile)](https://github.com/zarzet/SpotiFLAC-Mobile)
 
@@ -112,7 +108,7 @@ The software is provided "as is", without warranty of any kind. The author assum
 
 ## API Credits
 
-[MusicBrainz](https://musicbrainz.org) · [LRCLIB](https://lrclib.net) · [Song.link](https://song.link) · [hifi-api](https://github.com/binimum/hifi-api) · [dabmusic.xyz](https://dabmusic.xyz)
+[MusicBrainz](https://musicbrainz.org) · [LRCLIB](https://lrclib.net) · [Songlink/Odesli](https://song.link) · [hifi-api](https://github.com/binimum/hifi-api) · [dabmusic.xyz](https://dabmusic.xyz)
 
 > [!TIP]
 >
