@@ -40,13 +40,17 @@ const GetTrackISRC = (spotifyId: string): Promise<string> => (window as any)["go
 async function resolveTemplateISRC(settings: {
     folderTemplate?: string;
     filenameTemplate?: string;
+    existingFileCheckMode?: string;
 }, spotifyId?: string): Promise<string> {
     if (!spotifyId) {
         return "";
     }
     const folderTemplate = settings.folderTemplate || "";
     const filenameTemplate = settings.filenameTemplate || "";
-    if (!folderTemplate.includes("{isrc}") && !filenameTemplate.includes("{isrc}")) {
+    const shouldResolveISRC = settings.existingFileCheckMode === "isrc" ||
+        folderTemplate.includes("{isrc}") ||
+        filenameTemplate.includes("{isrc}");
+    if (!shouldResolveISRC) {
         return "";
     }
     try {
@@ -56,26 +60,18 @@ async function resolveTemplateISRC(settings: {
         return "";
     }
 }
-function getTidalVariant(settings: any): "tidal" | "alt" {
-    return settings?.tidalVariant === "alt" ? "alt" : "tidal";
-}
-function isTidalAltVariant(settings: any): boolean {
-    return getTidalVariant(settings) === "alt";
-}
 function getTidalAudioFormat(settings: any, mode: "single" | "auto"): "LOSSLESS" | "HI_RES_LOSSLESS" {
-    if (isTidalAltVariant(settings)) {
-        return "LOSSLESS";
-    }
     if (mode === "auto") {
         return (settings.autoQuality || "24") === "24" ? "HI_RES_LOSSLESS" : "LOSSLESS";
     }
     return settings.tidalQuality || "LOSSLESS";
 }
-function shouldFetchStreamingURLs(order: string[], settings: any): boolean {
-    return order.includes("amazon") || (order.includes("tidal") && !isTidalAltVariant(settings));
+function shouldFetchStreamingURLs(order: string[]): boolean {
+    return order.includes("amazon") || order.includes("tidal");
 }
 export function useDownload(region: string) {
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
+    const [downloadRemainingCount, setDownloadRemainingCount] = useState<number>(0);
     const [isDownloading, setIsDownloading] = useState(false);
     const [downloadingTrack, setDownloadingTrack] = useState<string | null>(null);
     const [bulkDownloadType, setBulkDownloadType] = useState<"all" | "selected" | null>(null);
@@ -87,10 +83,19 @@ export function useDownload(region: string) {
         artists: string;
     } | null>(null);
     const shouldStopDownloadRef = useRef(false);
+    const updateBatchProgress = (completedCount: number, totalCount: number) => {
+        const safeTotalCount = Math.max(0, totalCount);
+        const safeCompletedCount = Math.min(Math.max(0, completedCount), safeTotalCount);
+        setDownloadProgress(safeTotalCount > 0 ? Math.min(100, Math.round((safeCompletedCount / safeTotalCount) * 100)) : 0);
+        setDownloadRemainingCount(Math.max(0, safeTotalCount - safeCompletedCount));
+    };
     const downloadWithAutoFallback = async (id: string, settings: any, trackName?: string, artistName?: string, albumName?: string, playlistName?: string, position?: number, spotifyId?: string, durationMs?: number, releaseYear?: string, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string) => {
         const service = settings.downloader;
         const query = trackName && artistName ? `${trackName} ${artistName} ` : undefined;
         const os = settings.operatingSystem;
+        const customTidalApi = typeof settings.customTidalApi === "string" && settings.customTidalApi.trim().startsWith("https://")
+            ? settings.customTidalApi.trim().replace(/\/+$/g, "")
+            : undefined;
         let outputDir = settings.downloadPath;
         let useAlbumTrackNumber = false;
         const placeholder = "__SLASH_PLACEHOLDER__";
@@ -193,10 +198,8 @@ export function useDownload(region: string) {
         }
         if (service === "auto") {
             const order = (settings.autoOrder || "tidal-amazon-qobuz").split("-");
-            const tidalVariant = getTidalVariant(settings);
-            const tidalLabel = tidalVariant === "alt" ? "Tidal Alt." : "Tidal";
             let streamingURLs: any = null;
-            if (spotifyId && shouldFetchStreamingURLs(order, settings)) {
+            if (spotifyId && shouldFetchStreamingURLs(order)) {
                 try {
                     const { GetStreamingURLs } = await import("../../wailsjs/go/main/App");
                     const urlsJson = await GetStreamingURLs(spotifyId, region);
@@ -213,9 +216,9 @@ export function useDownload(region: string) {
             const is24Bit = (settings.autoQuality || "24") === "24";
             const qobuzQuality = is24Bit ? "27" : "6";
             for (const s of order) {
-                if (s === "tidal" && ((tidalVariant === "alt" && spotifyId) || streamingURLs?.tidal_url)) {
+                if (s === "tidal" && streamingURLs?.tidal_url) {
                     try {
-                        logger.debug(`trying ${tidalLabel} for: ${trackName} - ${artistName}`);
+                        logger.debug(`trying Tidal for: ${trackName} - ${artistName}`);
                         const response = await downloadTrack({
                             service: "tidal",
                             query,
@@ -233,11 +236,11 @@ export function useDownload(region: string) {
                             spotify_id: spotifyId,
                             embed_lyrics: settings.embedLyrics,
                             embed_max_quality_cover: settings.embedMaxQualityCover,
-                            service_url: tidalVariant === "alt" ? undefined : streamingURLs?.tidal_url,
-                            tidal_variant: tidalVariant,
+                            service_url: streamingURLs?.tidal_url,
                             duration: durationSeconds,
                             item_id: itemID,
                             audio_format: tidalQuality,
+                            tidal_api_url: customTidalApi,
                             spotify_track_number: spotifyTrackNumber,
                             spotify_disc_number: spotifyDiscNumber,
                             spotify_total_tracks: spotifyTotalTracks,
@@ -250,17 +253,17 @@ export function useDownload(region: string) {
                             embed_genre: settings.embedGenre,
                         });
                         if (response.success) {
-                            logger.success(`${tidalLabel}: ${trackName} - ${artistName}`);
+                            logger.success(`Tidal: ${trackName} - ${artistName}`);
                             return response;
                         }
                         const errMsg = response.error || response.message || "Failed";
-                        fallbackErrors.push(`[${tidalLabel}] ${errMsg}`);
+                        fallbackErrors.push(`[Tidal] ${errMsg}`);
                         lastResponse = response;
-                        logger.warning(`${tidalLabel} failed, trying next...`);
+                        logger.warning(`Tidal failed, trying next...`);
                     }
                     catch (err) {
-                        logger.error(`${tidalLabel} error: ${err}`);
-                        fallbackErrors.push(`[${tidalLabel}] ${String(err)}`);
+                        logger.error(`Tidal error: ${err}`);
+                        fallbackErrors.push(`[Tidal] ${String(err)}`);
                         lastResponse = { success: false, error: String(err) };
                     }
                 }
@@ -398,7 +401,7 @@ export function useDownload(region: string) {
             duration: durationSecondsForFallback,
             item_id: itemID,
             audio_format: audioFormat,
-            tidal_variant: service === "tidal" ? getTidalVariant(settings) : undefined,
+            tidal_api_url: service === "tidal" ? customTidalApi : undefined,
             spotify_track_number: spotifyTrackNumber,
             spotify_disc_number: spotifyDiscNumber,
             spotify_total_tracks: spotifyTotalTracks,
@@ -480,10 +483,8 @@ export function useDownload(region: string) {
         }
         if (service === "auto") {
             const order = (settings.autoOrder || "tidal-amazon-qobuz").split("-");
-            const tidalVariant = getTidalVariant(settings);
-            const tidalLabel = tidalVariant === "alt" ? "Tidal Alt." : "Tidal";
             let streamingURLs: any = null;
-            if (spotifyId && shouldFetchStreamingURLs(order, settings)) {
+            if (spotifyId && shouldFetchStreamingURLs(order)) {
                 try {
                     const { GetStreamingURLs } = await import("../../wailsjs/go/main/App");
                     const urlsJson = await GetStreamingURLs(spotifyId, region);
@@ -500,9 +501,9 @@ export function useDownload(region: string) {
             const is24Bit = (settings.autoQuality || "24") === "24";
             const qobuzQuality = is24Bit ? "27" : "6";
             for (const s of order) {
-                if (s === "tidal" && ((tidalVariant === "alt" && spotifyId) || streamingURLs?.tidal_url)) {
+                if (s === "tidal" && streamingURLs?.tidal_url) {
                     try {
-                        logger.debug(`trying ${tidalLabel} for: ${trackName} - ${artistName}`);
+                        logger.debug(`trying Tidal for: ${trackName} - ${artistName}`);
                         const response = await downloadTrack({
                             service: "tidal",
                             query,
@@ -520,8 +521,7 @@ export function useDownload(region: string) {
                             spotify_id: spotifyId,
                             embed_lyrics: settings.embedLyrics,
                             embed_max_quality_cover: settings.embedMaxQualityCover,
-                            service_url: tidalVariant === "alt" ? undefined : streamingURLs?.tidal_url,
-                            tidal_variant: tidalVariant,
+                            service_url: streamingURLs?.tidal_url,
                             duration: durationSeconds,
                             item_id: itemID,
                             audio_format: tidalQuality,
@@ -537,17 +537,17 @@ export function useDownload(region: string) {
                             embed_genre: settings.embedGenre,
                         });
                         if (response.success) {
-                            logger.success(`${tidalLabel}: ${trackName} - ${artistName}`);
+                            logger.success(`Tidal: ${trackName} - ${artistName}`);
                             return response;
                         }
                         const errMsg = response.error || response.message || "Failed";
-                        fallbackErrors.push(`[${tidalLabel}] ${errMsg}`);
+                        fallbackErrors.push(`[Tidal] ${errMsg}`);
                         lastResponse = response;
-                        logger.warning(`${tidalLabel} failed, trying next...`);
+                        logger.warning(`Tidal failed, trying next...`);
                     }
                     catch (err) {
-                        logger.error(`${tidalLabel} error: ${err}`);
-                        fallbackErrors.push(`[${tidalLabel}] ${String(err)}`);
+                        logger.error(`Tidal error: ${err}`);
+                        fallbackErrors.push(`[Tidal] ${String(err)}`);
                         lastResponse = { success: false, error: String(err) };
                     }
                 }
@@ -684,7 +684,6 @@ export function useDownload(region: string) {
             duration: durationSecondsForFallback,
             item_id: itemID,
             audio_format: audioFormat,
-            tidal_variant: service === "tidal" ? getTidalVariant(settings) : undefined,
             spotify_track_number: spotifyTrackNumber,
             spotify_disc_number: spotifyDiscNumber,
             spotify_total_tracks: spotifyTotalTracks,
@@ -752,6 +751,8 @@ export function useDownload(region: string) {
         setIsDownloading(true);
         setBulkDownloadType("selected");
         setDownloadProgress(0);
+        setDownloadRemainingCount(selectedTracks.length);
+        setCurrentDownloadInfo(null);
         let outputDir = settings.downloadPath;
         const os = settings.operatingSystem;
         const useAlbumTag = settings.folderTemplate?.includes("{album}");
@@ -820,7 +821,7 @@ export function useDownload(region: string) {
         let errorCount = 0;
         let skippedCount = existingSpotifyIDs.size;
         const total = selectedTracks.length;
-        setDownloadProgress(Math.round((skippedCount / total) * 100));
+        updateBatchProgress(skippedCount, total);
         for (let i = 0; i < tracksToDownload.length; i++) {
             if (shouldStopDownloadRef.current) {
                 toast.info(`Download stopped. ${successCount} tracks downloaded, ${tracksToDownload.length - i} remaining.`);
@@ -873,12 +874,13 @@ export function useDownload(region: string) {
                 }
             }
             const completedCount = skippedCount + successCount + errorCount;
-            setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
+            updateBatchProgress(completedCount, total);
         }
         setDownloadingTrack(null);
         setCurrentDownloadInfo(null);
         setIsDownloading(false);
         setBulkDownloadType(null);
+        updateBatchProgress(0, 0);
         shouldStopDownloadRef.current = false;
         const { CancelAllQueuedItems } = await import("../../wailsjs/go/main/App");
         await CancelAllQueuedItems();
@@ -928,6 +930,8 @@ export function useDownload(region: string) {
         setIsDownloading(true);
         setBulkDownloadType("all");
         setDownloadProgress(0);
+        setDownloadRemainingCount(tracksWithId.length);
+        setCurrentDownloadInfo(null);
         let outputDir = settings.downloadPath;
         const os = settings.operatingSystem;
         const useAlbumTag = settings.folderTemplate?.includes("{album}");
@@ -991,7 +995,7 @@ export function useDownload(region: string) {
         let errorCount = 0;
         let skippedCount = existingSpotifyIDs.size;
         const total = tracksWithId.length;
-        setDownloadProgress(Math.round((skippedCount / total) * 100));
+        updateBatchProgress(skippedCount, total);
         for (let i = 0; i < tracksToDownload.length; i++) {
             if (shouldStopDownloadRef.current) {
                 toast.info(`Download stopped. ${successCount} tracks downloaded, ${tracksToDownload.length - i} remaining.`);
@@ -1041,12 +1045,13 @@ export function useDownload(region: string) {
                 await MarkDownloadItemFailed(itemID, err instanceof Error ? err.message : String(err));
             }
             const completedCount = skippedCount + successCount + errorCount;
-            setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
+            updateBatchProgress(completedCount, total);
         }
         setDownloadingTrack(null);
         setCurrentDownloadInfo(null);
         setIsDownloading(false);
         setBulkDownloadType(null);
+        updateBatchProgress(0, 0);
         shouldStopDownloadRef.current = false;
         const { CancelAllQueuedItems: CancelQueued } = await import("../../wailsjs/go/main/App");
         await CancelQueued();
@@ -1093,6 +1098,7 @@ export function useDownload(region: string) {
     };
     return {
         downloadProgress,
+        downloadRemainingCount,
         isDownloading,
         downloadingTrack,
         bulkDownloadType,
